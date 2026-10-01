@@ -16,10 +16,19 @@
 |
 */
 
+process.on('uncaughtException', (err) => {
+  console.error('*** ACE UNCAUGHT EXCEPTION ***:', err)
+  process.exit(1)
+})
+process.on('unhandledRejection', (err) => {
+  console.error('*** ACE UNHANDLED REJECTION ***:', err)
+  process.exit(1)
+})
+
 /**
  * Register hook to process TypeScript files using ts-node
  */
-import 'ts-node-maintained/register/esm'
+await import('ts-node-maintained/register/esm')
 
 /**
  * Import ace console entrypoint

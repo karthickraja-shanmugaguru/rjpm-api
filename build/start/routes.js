@@ -1,0 +1,80 @@
+import router from '@adonisjs/core/services/router';
+import AuthController from '#controllers/auth_controller';
+import CategoryController from '#controllers/category_controller';
+import ServiceController from '#controllers/service_controller';
+import PackageController from '#controllers/package_controller';
+import ProviderController from '#controllers/provider_controller';
+import LabourController from '#controllers/labour_controller';
+import CustomerController from '#controllers/customer_controller';
+import ProviderPortalController from '#controllers/provider_portal_controller';
+import AuthMiddleware from '#middleware/auth_middleware';
+import RoleMiddleware from '#middleware/role_middleware';
+const authMiddleware = new AuthMiddleware();
+const roleMiddleware = new RoleMiddleware();
+const auth = () => async (ctx, next) => {
+    return authMiddleware.handle(ctx, next);
+};
+const role = (roles) => async (ctx, next) => {
+    return roleMiddleware.handle(ctx, next, roles);
+};
+router.get('/', async () => {
+    return { status: 'healthy', message: 'Evently API is running', version: '1.0.0' };
+});
+router.group(() => {
+    router.post('/auth/send-otp', [AuthController, 'sendOtp']);
+    router.post('/auth/verify-otp', [AuthController, 'verifyOtp']);
+    router.post('/auth/register-provider', [AuthController, 'registerProvider']);
+    router.post('/auth/provider/login', [AuthController, 'providerLogin']);
+    router.post('/auth/provider/signup', [AuthController, 'providerSignup']);
+    router.post('/auth/provider/reset-password', [AuthController, 'providerResetPassword']);
+    router.get('/categories', [CategoryController, 'index']);
+    router.get('/services', [ServiceController, 'index']);
+    router.get('/services/:id', [ServiceController, 'show']);
+    router.get('/packages', [PackageController, 'index']);
+    router.get('/packages/:id', [PackageController, 'show']);
+    router.get('/providers', [ProviderController, 'index']);
+    router.get('/providers/:id', [ProviderController, 'show']);
+    router.get('/providers/:id/services', [ProviderController, 'getServices']);
+    router.get('/providers/:id/packages', [ProviderController, 'getPackages']);
+    router.get('/providers/:id/reviews', [ProviderController, 'getReviews']);
+    router.get('/labour', [LabourController, 'index']);
+    router.get('/labour/:id', [LabourController, 'show']);
+    router.get('/auth/me', [AuthController, 'me']).use(auth());
+    router.group(() => {
+        router.post('/enquiries', [CustomerController, 'createEnquiry']);
+        router.get('/customer/bookings', [CustomerController, 'getBookings']);
+        router.get('/customer/enquiries', [CustomerController, 'getBookings']);
+        router.get('/customer/favorites', [CustomerController, 'getFavorites']);
+        router.post('/customer/favorites/toggle', [CustomerController, 'toggleFavorite']);
+        router.post('/reviews', [CustomerController, 'createReview']);
+    }).use(auth()).use(role(['CUSTOMER', 'ADMIN', 'PROVIDER']));
+    router.group(() => {
+        router.get('/provider/dashboard', [ProviderPortalController, 'dashboard']);
+        router.get('/provider/profile', [ProviderPortalController, 'getProfile']);
+        router.put('/provider/profile', [ProviderPortalController, 'updateProfile']);
+        router.get('/provider/services', [ProviderPortalController, 'getServices']);
+        router.post('/provider/services', [ProviderPortalController, 'createService']);
+        router.put('/provider/services/:id', [ProviderPortalController, 'updateService']);
+        router.patch('/provider/services/:id/status', [ProviderPortalController, 'toggleServiceStatus']);
+        router.delete('/provider/services/:id', [ProviderPortalController, 'deleteService']);
+        router.get('/provider/packages', [ProviderPortalController, 'getPackages']);
+        router.post('/provider/packages', [ProviderPortalController, 'createPackage']);
+        router.put('/provider/packages/:id', [ProviderPortalController, 'updatePackage']);
+        router.patch('/provider/packages/:id/status', [ProviderPortalController, 'togglePackageStatus']);
+        router.delete('/provider/packages/:id', [ProviderPortalController, 'deletePackage']);
+        router.get('/provider/labour', [ProviderPortalController, 'getLabourListings']);
+        router.post('/provider/labour', [ProviderPortalController, 'createLabourListing']);
+        router.put('/provider/labour/:id', [ProviderPortalController, 'updateLabourListing']);
+        router.patch('/provider/labour/:id/status', [ProviderPortalController, 'toggleLabourListingStatus']);
+        router.delete('/provider/labour/:id', [ProviderPortalController, 'deleteLabourListing']);
+        router.get('/provider/enquiries', [ProviderPortalController, 'getEnquiries']);
+        router.patch('/provider/enquiries/:id/accept', [ProviderPortalController, 'acceptEnquiry']);
+        router.patch('/provider/enquiries/:id/decline', [ProviderPortalController, 'declineEnquiry']);
+        router.get('/provider/availability', [ProviderPortalController, 'getAvailability']);
+        router.post('/provider/availability', [ProviderPortalController, 'setAvailability']);
+        router.get('/provider/reviews', [ProviderPortalController, 'getReviews']);
+        router.post('/reviews/:id/reply', [ProviderPortalController, 'replyReview']);
+        router.get('/provider/performance', [ProviderPortalController, 'getPerformance']);
+    }).use(auth()).use(role(['PROVIDER', 'ADMIN']));
+}).prefix('/api');
+//# sourceMappingURL=routes.js.map
