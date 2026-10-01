@@ -23,6 +23,11 @@ const role = (roles: string[]) => async (ctx: any, next: any) => {
   return roleMiddleware.handle(ctx, next, roles)
 }
 
+// Root health check route
+router.get('/', async () => {
+  return { status: 'healthy', message: 'Evently API is running', version: '1.0.0' }
+})
+
 router.group(() => {
 
   /* =========================================================================
