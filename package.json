@@ -53,7 +53,6 @@
     "@adonisjs/core": "^6.18.0",
     "@adonisjs/cors": "^2.2.1",
     "@adonisjs/lucid": "^21.6.1",
-    "@swc/core": "1.11.24",
     "@vinejs/vine": "^3.0.1",
     "better-sqlite3": "^13.0.3",
     "jsonwebtoken": "^9.0.3",
