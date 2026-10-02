@@ -15,7 +15,7 @@ export default class extends BaseSchema {
       table.string('price_display', 100).notNullable()
       table.decimal('price_amount', 10, 2).defaultTo(0)
       table.enum('status', ['LIVE', 'PAUSED', 'DRAFT']).defaultTo('LIVE')
-      table.string('cover_image', 500).nullable()
+      table.text('cover_image', 'longtext').nullable()
       table.string('icon', 50).defaultTo('✨')
       table.string('service_area_override', 255).nullable()
       table.text('inclusions').nullable()
@@ -31,7 +31,7 @@ export default class extends BaseSchema {
     this.schema.createTable('service_images', (table) => {
       table.increments('id').notNullable()
       table.integer('service_id').unsigned().references('id').inTable('services').onDelete('CASCADE')
-      table.string('image_url', 500).notNullable()
+      table.text('image_url', 'longtext').notNullable()
       table.integer('sort_order').defaultTo(0)
       table.timestamp('created_at').notNullable()
       table.timestamp('updated_at').nullable()

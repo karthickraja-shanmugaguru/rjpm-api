@@ -8,22 +8,6 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true })
 }
 
-const targetDb = app.makePath('database/data.sqlite3')
-const backupDb = app.makePath('database/data.sqlite3.backup')
-const rootBackupDb = app.makePath('../database/data.sqlite3.backup')
-
-if (!fs.existsSync(targetDb)) {
-  if (fs.existsSync(backupDb)) {
-    try {
-      fs.copyFileSync(backupDb, targetDb)
-    } catch {}
-  } else if (fs.existsSync(rootBackupDb)) {
-    try {
-      fs.copyFileSync(rootBackupDb, targetDb)
-    } catch {}
-  }
-}
-
 const dbConfig = defineConfig({
   connection: env.get('DB_CONNECTION', 'sqlite'),
   connections: {
@@ -49,6 +33,7 @@ const dbConfig = defineConfig({
         user: env.get('DB_USER', 'root'),
         password: env.get('DB_PASSWORD', ''),
         database: env.get('DB_DATABASE', 'evently'),
+        ssl: env.get('DB_SSL') ? { rejectUnauthorized: false } : undefined,
       },
       migrations: {
         naturalSort: true,

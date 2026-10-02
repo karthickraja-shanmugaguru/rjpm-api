@@ -16,12 +16,6 @@ export default class extends BaseSchema {
             table.string('cover_image', 500).nullable();
             table.string('icon', 50).defaultTo('✨');
             table.string('service_area_override', 255).nullable();
-            table.text('inclusions').nullable();
-            table.text('terms').nullable();
-            table.string('duration', 100).nullable();
-            table.string('setup_time', 100).nullable();
-            table.text('highlights').nullable();
-            table.string('video_url', 500).nullable();
             table.timestamp('created_at').notNullable();
             table.timestamp('updated_at').nullable();
         });

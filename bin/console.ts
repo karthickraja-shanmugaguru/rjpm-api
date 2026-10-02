@@ -41,10 +41,7 @@ new Ignitor(APP_ROOT, { importer: IMPORTER })
   })
   .ace()
   .handle(process.argv.splice(2))
-  .catch(async (error) => {
+  .catch((error) => {
     process.exitCode = 1
-    console.error('Ace execution error:', error)
-    try {
-      await prettyPrintError(error)
-    } catch {}
+    prettyPrintError(error)
   })

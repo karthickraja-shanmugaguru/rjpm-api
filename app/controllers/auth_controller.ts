@@ -52,13 +52,13 @@ export default class AuthController {
    * Validate OTP and sign in / sign up customer or provider
    */
   async verifyOtp({ request, response }: HttpContext) {
-    const { phone, otp, role = 'CUSTOMER', name, businessName, primaryCategory, location, event_preference } = request.all()
-    const cleanPhone = String(phone || '').trim()
+    const { phone, otp, role = 'CUSTOMER', name, businessName, primaryCategory, location, event_preference, action } = request.all()
+    const cleanPhone = String(phone || '').trim().replace(/\D/g, '').slice(-10)
 
     if (!cleanPhone || cleanPhone.length !== 10) {
       return response.status(422).json({
         success: false,
-        message: 'Invalid phone number',
+        message: 'A valid 10-digit mobile number is required',
       })
     }
 
@@ -75,6 +75,24 @@ export default class AuthController {
     let user = await db.from('users').where('phone', cleanPhone).first()
     const isExistingUser = Boolean(user)
 
+    // Check action: If signup and user already exists, prevent duplicate signup
+    if (action === 'signup' && isExistingUser) {
+      return response.status(409).json({
+        success: false,
+        code: 'ACCOUNT_EXISTS',
+        message: `An account with mobile number ${cleanPhone} already exists. Please sign in instead.`,
+      })
+    }
+
+    // Check action: If signin and user does not exist, require signup
+    if (action === 'signin' && !isExistingUser) {
+      return response.status(404).json({
+        success: false,
+        code: 'ACCOUNT_NOT_FOUND',
+        message: `No account found with mobile number ${cleanPhone}. Please create an account to sign up.`,
+      })
+    }
+
     if (!user) {
       // Auto-register customer or provider
       const [id] = await db.table('users').insert({
@@ -90,15 +108,6 @@ export default class AuthController {
       const userId = typeof id === 'object' ? (id as any).id : id
       user = await db.from('users').where('id', userId).first()
     } else {
-      // Update name if customer provides an updated name
-      if (name && String(name).trim() && user.name !== String(name).trim()) {
-        await db.from('users').where('id', user.id).update({
-          name: String(name).trim(),
-          updated_at: now,
-        })
-        user.name = String(name).trim()
-      }
-
       if (role === 'PROVIDER' && user.role !== 'PROVIDER' && user.role !== 'ADMIN') {
         // Ensure user has provider privileges when logging in via provider portal
         await db.from('users').where('id', user.id).update({

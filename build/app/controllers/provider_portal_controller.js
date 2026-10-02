@@ -1,10 +1,9 @@
 import db from '@adonisjs/lucid/services/db';
 export default class ProviderPortalController {
     getProviderId(ctx) {
-        return ctx?.authProvider?.id || ctx?.authUser?.provider_id || 1;
+        return ctx.authProvider?.id || 1;
     }
-    async dashboard(ctx) {
-        const { response } = ctx;
+    async dashboard({ response }, ctx) {
         const providerId = this.getProviderId(ctx);
         const provider = await db.from('providers').where('id', providerId).first();
         const activeListingsCount = await db
@@ -30,23 +29,23 @@ export default class ProviderPortalController {
             success: true,
             data: {
                 providerName: provider?.owner_name || provider?.business_name || 'Partner',
-                businessName: provider?.business_name || 'My Business',
+                businessName: provider?.business_name,
                 stats: {
-                    profileViews: 0,
-                    profileViewsDelta: 'Fresh listing',
+                    profileViews: 428,
+                    profileViewsDelta: '+18% vs last week',
                     newEnquiries: Number(newEnquiriesCount[0]?.total || 0),
-                    newEnquiriesAction: `${Number(newEnquiriesCount[0]?.total || 0)} need your response`,
+                    newEnquiriesAction: `${newEnquiriesCount[0]?.total || 0} need your response`,
                     activeListings: Number(activeListingsCount[0]?.total || 0),
                     activeListingsNote: 'Active on marketplace',
-                    averageRating: provider?.rating || 0,
+                    averageRating: provider?.rating || 4.8,
                     reviewCount: provider?.review_count || 0,
                 },
                 profileCompletion: {
-                    percentage: Boolean(provider?.about) && Boolean(provider?.phone) ? 100 : 50,
+                    percentage: 78,
                     items: [
-                        { label: 'Business details', done: Boolean(provider?.business_name) },
-                        { label: 'Phone & WhatsApp', done: Boolean(provider?.phone) },
-                        { label: 'Active listings', done: Number(activeListingsCount[0]?.total || 0) > 0 },
+                        { label: 'Business details', done: true },
+                        { label: 'Service areas', done: true },
+                        { label: '3+ photos', done: true },
                         { label: 'Add description', done: Boolean(provider?.about) },
                     ],
                 },
@@ -61,8 +60,7 @@ export default class ProviderPortalController {
             },
         });
     }
-    async getProfile(ctx) {
-        const { response } = ctx;
+    async getProfile({ response }, ctx) {
         const providerId = this.getProviderId(ctx);
         const provider = await db.from('providers').where('id', providerId).first();
         const areas = await db.from('provider_service_areas').where('provider_id', providerId);
@@ -77,16 +75,10 @@ export default class ProviderPortalController {
                 about: provider.about,
                 phone: provider.phone,
                 whatsapp: provider.whatsapp,
-                coverImage: provider.cover_image,
-                logoImage: provider.logo_image,
-                profileImage: provider.logo_image,
                 rating: provider.rating,
                 reviewCount: provider.review_count,
-                experienceYears: Math.round(Number(provider.experience_years)) || 0,
-                completedEvents: Math.round(Number(provider.completed_events)) || 0,
-                responseTime: provider.response_time || 'Usually responds within 2 hours',
+                experienceYears: provider.experience_years,
                 verified: Boolean(provider.verified),
-                verificationStatus: provider.verification_status || 'VERIFIED',
                 serviceAreas: areas.map((a) => a.locality),
                 socialLinks: socialLinks.reduce((acc, curr) => {
                     acc[curr.platform] = curr.url;
@@ -95,41 +87,18 @@ export default class ProviderPortalController {
             },
         });
     }
-    async updateProfile(ctx) {
-        const { request, response } = ctx;
+    async updateProfile({ request, response }, ctx) {
         const providerId = this.getProviderId(ctx);
-        const { businessName, ownerName, primaryCategory, about, phone, whatsapp, experienceYears, completedEvents, responseTime, verified, serviceAreas, socialLinks, coverImage, logoImage, profileImage, } = request.all();
+        const { businessName, ownerName, about, phone, whatsapp, serviceAreas, socialLinks } = request.all();
         const now = new Date();
-        const updatePayload = {
+        await db.from('providers').where('id', providerId).update({
             business_name: businessName,
             owner_name: ownerName,
             about,
             phone,
             whatsapp,
             updated_at: now,
-        };
-        if (primaryCategory) {
-            updatePayload.primary_category = primaryCategory;
-        }
-        if (experienceYears !== undefined) {
-            updatePayload.experience_years = Number(experienceYears) || 0;
-        }
-        if (completedEvents !== undefined) {
-            updatePayload.completed_events = Number(completedEvents) || 0;
-        }
-        if (responseTime !== undefined) {
-            updatePayload.response_time = String(responseTime).trim();
-        }
-        if (verified !== undefined) {
-            updatePayload.verified = Boolean(verified);
-        }
-        if (coverImage !== undefined) {
-            updatePayload.cover_image = coverImage;
-        }
-        if (logoImage !== undefined || profileImage !== undefined) {
-            updatePayload.logo_image = logoImage !== undefined ? logoImage : profileImage;
-        }
-        await db.from('providers').where('id', providerId).update(updatePayload);
+        });
         if (Array.isArray(serviceAreas)) {
             await db.from('provider_service_areas').where('provider_id', providerId).delete();
             for (const loc of serviceAreas) {
@@ -162,226 +131,76 @@ export default class ProviderPortalController {
             message: 'Business profile updated successfully',
         });
     }
-    async getServices(ctx) {
-        const { response } = ctx;
+    async getServices({ response }, ctx) {
         const providerId = this.getProviderId(ctx);
         const services = await db.from('services').where('provider_id', providerId).orderBy('id', 'desc');
-        const serviceIds = services.map((s) => s.id);
-        const allImages = serviceIds.length > 0
-            ? await db.from('service_images').whereIn('service_id', serviceIds).orderBy('sort_order', 'asc')
-            : [];
         return response.json({
             success: true,
-            data: services.map((s) => {
-                const numPrice = typeof s.price_amount === 'number' ? s.price_amount : (parseFloat(String(s.price_amount || s.price_display || '').replace(/[^0-9.]/g, '')) || 0);
-                const sImages = allImages.filter((img) => img.service_id === s.id).map((img) => img.image_url);
-                return {
-                    id: s.id,
-                    name: s.name,
-                    title: s.name,
-                    category: s.category_name,
-                    price: numPrice,
-                    priceDisplay: s.price_display || (numPrice > 0 ? `₹${numPrice.toLocaleString('en-IN')}` : 'Price on request'),
-                    priceAmount: numPrice,
-                    pricingType: s.pricing_type,
-                    icon: s.icon || '✨',
-                    status: s.status,
-                    coverImage: s.cover_image,
-                    images: sImages,
-                    description: s.description,
-                    desc: s.description,
-                    serviceAreaOverride: s.service_area_override || '',
-                    inclusions: s.inclusions || '',
-                    terms: s.terms || '',
-                    duration: s.duration || '',
-                    setupTime: s.setup_time || '',
-                    highlights: s.highlights || '',
-                    videoUrl: s.video_url || '',
-                };
-            }),
+            data: services.map((s) => ({
+                id: s.id,
+                name: s.name,
+                category: s.category_name,
+                price: s.price_display,
+                priceAmount: s.price_amount,
+                pricingType: s.pricing_type,
+                icon: s.icon || '✨',
+                status: s.status === 'LIVE' ? 'Live' : s.status === 'PAUSED' ? 'Paused' : 'Draft',
+                desc: s.description,
+            })),
         });
     }
-    resolveLabourType(category, name) {
-        const text = `${category} ${name}`.toLowerCase();
-        if (text.includes('kitchen') || text.includes('cutter'))
-            return 'Kitchen Helpers & Cutters';
-        if (text.includes('dish') || text.includes('vessel') || text.includes('washer'))
-            return 'Dishwashers & Vessel Cleaners';
-        if (text.includes('clean') || text.includes('sweep') || text.includes('housekeep'))
-            return 'Cleaning Staff';
-        if (text.includes('panthal') || text.includes('shamiana') || text.includes('pandal') || text.includes('tent'))
-            return 'Panthal & Shamiana Riggers';
-        if (text.includes('setup') || text.includes('furniture') || text.includes('chair') || text.includes('table'))
-            return 'Setup & Furniture Crew';
-        if (text.includes('valet') || text.includes('parking') || text.includes('marshal') || text.includes('driver'))
-            return 'Valet Parking & Marshals';
-        if (text.includes('security') || text.includes('bouncer') || text.includes('guard'))
-            return 'Security & Bouncers';
-        if (text.includes('hospitality') || text.includes('thamboolam') || text.includes('welcome') || text.includes('host'))
-            return 'Hospitality & Thamboolam Staff';
-        if (text.includes('luggage') || text.includes('room attendant') || text.includes('porter'))
-            return 'Luggage & Room Attendants';
-        if (text.includes('generator') || text.includes('electric') || text.includes('lighting') || text.includes('sound'))
-            return 'Sound, Light & Generator Crew';
-        if (text.includes('garland') || text.includes('floral stringer') || text.includes('flower helper'))
-            return 'Flower & Garland Helpers';
-        if (text.includes('pooja') || text.includes('homam') || text.includes('vedic helper'))
-            return 'Pooja & Homam Assistants';
-        if (text.includes('server') ||
-            text.includes('panthi') ||
-            text.includes('catering staff') ||
-            text.includes('catring worker') ||
-            text.includes('catering worker') ||
-            text.includes('event staff') ||
-            text.includes('labour') ||
-            text.includes('helper') ||
-            text.includes('worker')) {
-            return 'Food & Panthi Servers';
-        }
-        return null;
-    }
-    async createService(ctx) {
-        const { request, response } = ctx;
+    async createService({ request, response }, ctx) {
         const providerId = this.getProviderId(ctx);
-        const { name, title, category, pricingType = 'STARTING_FROM', price, priceDisplay, description, status = 'LIVE', coverImage, images, serviceAreaOverride, inclusions, terms, duration, setupTime, highlights, videoUrl, } = request.all();
-        const serviceName = (name || title || '').trim();
-        if (!serviceName || !category) {
+        const { name, category, pricingType = 'STARTING_FROM', price, description, status = 'LIVE' } = request.all();
+        if (!name || !category) {
             return response.status(422).json({
                 success: false,
                 message: 'Service name and category are required',
             });
         }
-        const priceNum = typeof price === 'number' ? price : (parseFloat(String(price || '').replace(/[^0-9.]/g, '')) || 0);
-        const formattedDisplay = priceDisplay || (priceNum > 0 ? `₹${priceNum.toLocaleString('en-IN')}` : (price || 'Price on request'));
         const now = new Date();
         const [idRaw] = await db.table('services').insert({
             provider_id: providerId,
             category_name: category,
-            name: serviceName,
+            name,
             description: description || 'Professional service by provider',
             pricing_type: pricingType,
-            price_display: formattedDisplay,
-            price_amount: priceNum,
-            cover_image: coverImage || null,
+            price_display: price || 'Price on request',
+            price_amount: parseFloat(String(price || '').replace(/[^0-9.]/g, '')) || 0,
             icon: '✨',
-            status: (status || 'LIVE').toUpperCase(),
-            service_area_override: serviceAreaOverride || null,
-            inclusions: inclusions || null,
-            terms: terms || null,
-            duration: duration || null,
-            setup_time: setupTime || null,
-            highlights: highlights || null,
-            video_url: videoUrl || null,
+            status: status.toUpperCase(),
             created_at: now,
             updated_at: now,
         }).returning('id');
         const newId = typeof idRaw === 'object' ? idRaw.id : idRaw;
-        if (Array.isArray(images) && images.length > 0) {
-            for (let i = 0; i < Math.min(images.length, 10); i++) {
-                const imgUrl = typeof images[i] === 'string' ? images[i] : images[i]?.image_url;
-                if (imgUrl && String(imgUrl).trim()) {
-                    await db.table('service_images').insert({
-                        service_id: newId,
-                        image_url: String(imgUrl).trim(),
-                        sort_order: i,
-                        created_at: now,
-                        updated_at: now,
-                    });
-                }
-            }
-        }
-        const labourType = this.resolveLabourType(category, serviceName);
-        if (labourType) {
-            const provider = await db.from('providers').where('id', providerId).first();
-            const staffDisplay = formattedDisplay.toLowerCase().includes('staff') || formattedDisplay.toLowerCase().includes('person') || formattedDisplay.toLowerCase().includes('worker')
-                ? formattedDisplay
-                : `${formattedDisplay} / staff`;
-            await db.table('labour_listings').insert({
-                provider_id: providerId,
-                name: serviceName,
-                type: labourType,
-                provider_name: provider?.business_name || 'Verified Provider',
-                price_display: staffDisplay,
-                price_amount: priceNum,
-                rating: provider?.rating || 0,
-                verified: Boolean(provider?.verified),
-                details: description || inclusions || 'Professional event staff & labour support in Rajapalayam.',
-                created_at: now,
-                updated_at: now,
-            });
-        }
         return response.status(201).json({
             success: true,
             message: 'Service created successfully',
             data: { id: newId },
         });
     }
-    async updateService(ctx) {
-        const { params, request, response } = ctx;
+    async updateService({ params, request, response }, ctx) {
         const providerId = this.getProviderId(ctx);
-        const { name, title, category, price, priceDisplay, description, pricingType, coverImage, status, images, serviceAreaOverride, inclusions, terms, duration, setupTime, highlights, videoUrl, } = request.all();
+        const { name, category, price, description, pricingType } = request.all();
         const now = new Date();
         const service = await db.from('services').where('id', params.id).where('provider_id', providerId).first();
         if (!service) {
             return response.status(404).json({ success: false, message: 'Service not found or unauthorized' });
         }
-        const serviceName = (name || title || '').trim();
-        const priceNum = typeof price === 'number' ? price : (price ? parseFloat(String(price).replace(/[^0-9.]/g, '')) : undefined);
-        const formattedDisplay = priceDisplay || (priceNum !== undefined && priceNum > 0 ? `₹${priceNum.toLocaleString('en-IN')}` : price);
-        const updatePayload = { updated_at: now };
-        if (serviceName)
-            updatePayload.name = serviceName;
-        if (category)
-            updatePayload.category_name = category;
-        if (formattedDisplay !== undefined)
-            updatePayload.price_display = formattedDisplay;
-        if (priceNum !== undefined)
-            updatePayload.price_amount = priceNum;
-        if (description !== undefined)
-            updatePayload.description = description;
-        if (pricingType)
-            updatePayload.pricing_type = pricingType;
-        if (coverImage !== undefined)
-            updatePayload.cover_image = coverImage;
-        if (status)
-            updatePayload.status = status.toUpperCase();
-        if (serviceAreaOverride !== undefined)
-            updatePayload.service_area_override = serviceAreaOverride || null;
-        if (inclusions !== undefined)
-            updatePayload.inclusions = inclusions || null;
-        if (terms !== undefined)
-            updatePayload.terms = terms || null;
-        if (duration !== undefined)
-            updatePayload.duration = duration || null;
-        if (setupTime !== undefined)
-            updatePayload.setup_time = setupTime || null;
-        if (highlights !== undefined)
-            updatePayload.highlights = highlights || null;
-        if (videoUrl !== undefined)
-            updatePayload.video_url = videoUrl || null;
-        await db.from('services').where('id', params.id).update(updatePayload);
-        if (Array.isArray(images)) {
-            await db.from('service_images').where('service_id', params.id).delete();
-            for (let i = 0; i < Math.min(images.length, 10); i++) {
-                const imgUrl = typeof images[i] === 'string' ? images[i] : images[i]?.image_url;
-                if (imgUrl && String(imgUrl).trim()) {
-                    await db.table('service_images').insert({
-                        service_id: params.id,
-                        image_url: String(imgUrl).trim(),
-                        sort_order: i,
-                        created_at: now,
-                        updated_at: now,
-                    });
-                }
-            }
-        }
+        await db.from('services').where('id', params.id).update({
+            name: name || service.name,
+            category_name: category || service.category_name,
+            price_display: price || service.price_display,
+            description: description !== undefined ? description : service.description,
+            pricing_type: pricingType || service.pricing_type,
+            updated_at: now,
+        });
         return response.json({
             success: true,
             message: 'Service updated successfully',
         });
     }
-    async toggleServiceStatus(ctx) {
-        const { params, response } = ctx;
+    async toggleServiceStatus({ params, response }, ctx) {
         const providerId = this.getProviderId(ctx);
         const service = await db.from('services').where('id', params.id).where('provider_id', providerId).first();
         if (!service) {
@@ -398,82 +217,46 @@ export default class ProviderPortalController {
             status: nextStatus === 'LIVE' ? 'Live' : 'Paused',
         });
     }
-    async deleteService(ctx) {
-        const { params, response } = ctx;
+    async deleteService({ params, response }, ctx) {
         const providerId = this.getProviderId(ctx);
-        const service = await db.from('services').where('id', params.id).where('provider_id', providerId).first();
-        if (service) {
-            await db.from('labour_listings').where('provider_id', providerId).where('name', service.name).delete();
-        }
         await db.from('services').where('id', params.id).where('provider_id', providerId).delete();
         return response.json({
             success: true,
             message: 'Service deleted successfully',
         });
     }
-    async getPackages(ctx) {
-        const { response } = ctx;
+    async getPackages({ response }, ctx) {
         const providerId = this.getProviderId(ctx);
         const packages = await db.from('packages').where('provider_id', providerId).orderBy('id', 'desc');
         const pkgIds = packages.map((p) => p.id);
         const relations = await db
             .from('package_services')
-            .join('services', 'package_services.service_id', 'services.id')
-            .whereIn('package_services.package_id', pkgIds)
-            .select('package_services.package_id', 'services.id', 'services.name as title', 'services.category_name as category', 'services.price_amount as price', 'services.price_display as priceDisplay');
-        const pkgImages = await db
-            .from('package_images')
             .whereIn('package_id', pkgIds)
-            .orderBy('sort_order', 'asc');
+            .select('package_id', 'service_id');
         return response.json({
             success: true,
-            data: packages.map((p) => {
-                const pServices = relations.filter((r) => r.package_id === p.id);
-                const pImages = pkgImages.filter((img) => img.package_id === p.id).map((img) => img.image_url);
-                return {
-                    id: p.id,
-                    name: p.name,
-                    type: p.event_type,
-                    eventType: p.event_type,
-                    pricingType: p.pricing_type || 'STARTING_FROM',
-                    price: p.price_amount || parseFloat(String(p.price_display || '').replace(/[^0-9.]/g, '')) || 0,
-                    priceDisplay: p.price_display,
-                    guests: p.guest_capacity || 'Up to 500 guests',
-                    guestCapacity: p.guest_capacity,
-                    status: p.status === 'LIVE' ? 'Live' : p.status === 'PAUSED' ? 'Paused' : 'Draft',
-                    description: p.description,
-                    coverImage: p.cover_image,
-                    icon: p.icon || '📦',
-                    inclusions: p.inclusions,
-                    exclusions: p.exclusions,
-                    highlights: p.highlights,
-                    duration: p.duration,
-                    setupTime: p.setup_time,
-                    advanceNotice: p.advance_notice,
-                    terms: p.terms,
-                    customizable: Boolean(p.customizable ?? true),
-                    services: pServices,
-                    serviceIds: pServices.map((s) => s.id),
-                    images: pImages,
-                };
-            }),
+            data: packages.map((p) => ({
+                id: p.id,
+                name: p.name,
+                type: p.event_type,
+                price: p.price_display,
+                guests: p.guest_capacity || 'Up to 500 guests',
+                status: p.status === 'LIVE' ? 'Live' : p.status === 'PAUSED' ? 'Paused' : 'Draft',
+                description: p.description,
+                icon: p.icon || '📦',
+                services: relations.filter((r) => r.package_id === p.id).map((r) => r.service_id),
+            })),
         });
     }
-    async createPackage(ctx) {
-        const { request, response } = ctx;
+    async createPackage({ request, response }, ctx) {
         const providerId = this.getProviderId(ctx);
-        const { name, type, eventType, price, pricingType = 'STARTING_FROM', guests, guestCapacity, description, inclusions, exclusions, highlights, duration, setupTime, setup_time, advanceNotice, advance_notice, terms, customizable, services, serviceIds, status = 'LIVE', coverImage, images, } = request.all();
-        const chosenType = (eventType || type || '').trim();
-        const chosenServiceIds = Array.isArray(serviceIds) ? serviceIds : Array.isArray(services) ? services : [];
-        if (!name || !chosenType) {
+        const { name, type, price, guests, description, services: selectedServiceIds, status = 'LIVE' } = request.all();
+        if (!name || !type || !Array.isArray(selectedServiceIds) || selectedServiceIds.length === 0) {
             return response.status(422).json({
                 success: false,
-                message: 'Package name and event type are required',
+                message: 'Package name, event type and at least one included service are required',
             });
         }
-        const priceNum = typeof price === 'number' ? price : (parseFloat(String(price || '').replace(/[^0-9.]/g, '')) || 0);
-        const formattedPrice = priceNum > 0 ? `₹${priceNum.toLocaleString('en-IN')}` : (price || 'Price on request');
-        const finalGuests = guestCapacity ? `${guestCapacity} guests` : (guests || 'Capacity on request');
         const now = new Date();
         const iconMap = {
             Wedding: '💍',
@@ -487,52 +270,25 @@ export default class ProviderPortalController {
         };
         const [idRaw] = await db.table('packages').insert({
             provider_id: providerId,
-            name: name.trim(),
-            event_type: chosenType,
-            pricing_type: pricingType,
-            price_display: formattedPrice,
-            price_amount: priceNum,
-            guest_capacity: finalGuests,
+            name,
+            event_type: type,
+            price_display: price || 'Price on request',
+            price_amount: parseFloat(String(price || '').replace(/[^0-9.]/g, '')) || 0,
+            guest_capacity: guests || 'Capacity on request',
             description: description || 'Event celebration bundle',
-            inclusions: inclusions ? (typeof inclusions === 'string' ? inclusions : JSON.stringify(inclusions)) : null,
-            exclusions: exclusions ? (typeof exclusions === 'string' ? exclusions : JSON.stringify(exclusions)) : null,
-            highlights: highlights ? (typeof highlights === 'string' ? highlights : JSON.stringify(highlights)) : null,
-            duration: duration || null,
-            setup_time: setupTime || setup_time || null,
-            advance_notice: advanceNotice || advance_notice || null,
-            terms: terms || null,
-            customizable: customizable !== undefined ? (customizable ? 1 : 0) : 1,
-            cover_image: coverImage || null,
             status: status.toUpperCase(),
-            icon: iconMap[chosenType] || '📦',
+            icon: iconMap[type] || '📦',
             created_at: now,
             updated_at: now,
         }).returning('id');
         const pkgId = typeof idRaw === 'object' ? idRaw.id : idRaw;
-        for (const sId of chosenServiceIds) {
-            const cleanServiceId = typeof sId === 'object' ? sId.id : sId;
-            if (cleanServiceId) {
-                await db.table('package_services').insert({
-                    package_id: pkgId,
-                    service_id: cleanServiceId,
-                    created_at: now,
-                    updated_at: now,
-                });
-            }
-        }
-        if (Array.isArray(images) && images.length > 0) {
-            for (let i = 0; i < Math.min(images.length, 10); i++) {
-                const imgUrl = typeof images[i] === 'string' ? images[i] : images[i]?.image_url;
-                if (imgUrl && String(imgUrl).trim()) {
-                    await db.table('package_images').insert({
-                        package_id: pkgId,
-                        image_url: String(imgUrl).trim(),
-                        sort_order: i,
-                        created_at: now,
-                        updated_at: now,
-                    });
-                }
-            }
+        for (const sId of selectedServiceIds) {
+            await db.table('package_services').insert({
+                package_id: pkgId,
+                service_id: sId,
+                created_at: now,
+                updated_at: now,
+            });
         }
         return response.status(201).json({
             success: true,
@@ -540,83 +296,31 @@ export default class ProviderPortalController {
             data: { id: pkgId },
         });
     }
-    async updatePackage(ctx) {
-        const { params, request, response } = ctx;
+    async updatePackage({ params, request, response }, ctx) {
         const providerId = this.getProviderId(ctx);
-        const { name, type, eventType, price, pricingType, guests, guestCapacity, description, inclusions, exclusions, highlights, duration, setupTime, setup_time, advanceNotice, advance_notice, terms, customizable, services, serviceIds, status, coverImage, images, } = request.all();
+        const { name, type, price, guests, description, services: selectedServiceIds } = request.all();
         const now = new Date();
         const pkg = await db.from('packages').where('id', params.id).where('provider_id', providerId).first();
         if (!pkg) {
             return response.status(404).json({ success: false, message: 'Package not found' });
         }
-        const chosenType = (eventType || type || '').trim();
-        const chosenServiceIds = Array.isArray(serviceIds) ? serviceIds : Array.isArray(services) ? services : null;
-        const priceNum = price !== undefined ? (typeof price === 'number' ? price : (parseFloat(String(price || '').replace(/[^0-9.]/g, '')) || 0)) : undefined;
-        const formattedPrice = priceNum !== undefined ? (priceNum > 0 ? `₹${priceNum.toLocaleString('en-IN')}` : 'Price on request') : undefined;
-        const finalGuests = guestCapacity !== undefined ? (guestCapacity ? `${guestCapacity} guests` : '') : guests;
-        const updatePayload = { updated_at: now };
-        if (name)
-            updatePayload.name = name.trim();
-        if (chosenType)
-            updatePayload.event_type = chosenType;
-        if (pricingType)
-            updatePayload.pricing_type = pricingType;
-        if (formattedPrice !== undefined)
-            updatePayload.price_display = formattedPrice;
-        if (priceNum !== undefined)
-            updatePayload.price_amount = priceNum;
-        if (finalGuests !== undefined)
-            updatePayload.guest_capacity = finalGuests;
-        if (description !== undefined)
-            updatePayload.description = description;
-        if (inclusions !== undefined)
-            updatePayload.inclusions = inclusions ? (typeof inclusions === 'string' ? inclusions : JSON.stringify(inclusions)) : null;
-        if (exclusions !== undefined)
-            updatePayload.exclusions = exclusions ? (typeof exclusions === 'string' ? exclusions : JSON.stringify(exclusions)) : null;
-        if (highlights !== undefined)
-            updatePayload.highlights = highlights ? (typeof highlights === 'string' ? highlights : JSON.stringify(highlights)) : null;
-        if (duration !== undefined)
-            updatePayload.duration = duration || null;
-        if (setupTime !== undefined || setup_time !== undefined)
-            updatePayload.setup_time = setupTime || setup_time || null;
-        if (advanceNotice !== undefined || advance_notice !== undefined)
-            updatePayload.advance_notice = advanceNotice || advance_notice || null;
-        if (terms !== undefined)
-            updatePayload.terms = terms || null;
-        if (customizable !== undefined)
-            updatePayload.customizable = customizable ? 1 : 0;
-        if (coverImage !== undefined)
-            updatePayload.cover_image = coverImage;
-        if (status)
-            updatePayload.status = status.toUpperCase();
-        await db.from('packages').where('id', params.id).update(updatePayload);
-        if (chosenServiceIds !== null) {
+        await db.from('packages').where('id', params.id).update({
+            name: name || pkg.name,
+            event_type: type || pkg.event_type,
+            price_display: price || pkg.price_display,
+            guest_capacity: guests || pkg.guest_capacity,
+            description: description !== undefined ? description : pkg.description,
+            updated_at: now,
+        });
+        if (Array.isArray(selectedServiceIds)) {
             await db.from('package_services').where('package_id', params.id).delete();
-            for (const sId of chosenServiceIds) {
-                const cleanServiceId = typeof sId === 'object' ? sId.id : sId;
-                if (cleanServiceId) {
-                    await db.table('package_services').insert({
-                        package_id: params.id,
-                        service_id: cleanServiceId,
-                        created_at: now,
-                        updated_at: now,
-                    });
-                }
-            }
-        }
-        if (Array.isArray(images)) {
-            await db.from('package_images').where('package_id', params.id).delete();
-            for (let i = 0; i < Math.min(images.length, 10); i++) {
-                const imgUrl = typeof images[i] === 'string' ? images[i] : images[i]?.image_url;
-                if (imgUrl && String(imgUrl).trim()) {
-                    await db.table('package_images').insert({
-                        package_id: params.id,
-                        image_url: String(imgUrl).trim(),
-                        sort_order: i,
-                        created_at: now,
-                        updated_at: now,
-                    });
-                }
+            for (const sId of selectedServiceIds) {
+                await db.table('package_services').insert({
+                    package_id: params.id,
+                    service_id: sId,
+                    created_at: now,
+                    updated_at: now,
+                });
             }
         }
         return response.json({
@@ -624,8 +328,7 @@ export default class ProviderPortalController {
             message: 'Package updated successfully',
         });
     }
-    async togglePackageStatus(ctx) {
-        const { params, response } = ctx;
+    async togglePackageStatus({ params, response }, ctx) {
         const providerId = this.getProviderId(ctx);
         const pkg = await db.from('packages').where('id', params.id).where('provider_id', providerId).first();
         if (!pkg) {
@@ -642,8 +345,7 @@ export default class ProviderPortalController {
             status: nextStatus === 'LIVE' ? 'Live' : 'Paused',
         });
     }
-    async deletePackage(ctx) {
-        const { params, response } = ctx;
+    async deletePackage({ params, response }, ctx) {
         const providerId = this.getProviderId(ctx);
         await db.from('packages').where('id', params.id).where('provider_id', providerId).delete();
         return response.json({
@@ -651,8 +353,7 @@ export default class ProviderPortalController {
             message: 'Package deleted successfully',
         });
     }
-    async getEnquiries(ctx) {
-        const { response } = ctx;
+    async getEnquiries({ response }, ctx) {
         const providerId = this.getProviderId(ctx);
         const list = await db
             .from('enquiries')
@@ -677,8 +378,7 @@ export default class ProviderPortalController {
             })),
         });
     }
-    async acceptEnquiry(ctx) {
-        const { params, response } = ctx;
+    async acceptEnquiry({ params, response }, ctx) {
         const providerId = this.getProviderId(ctx);
         const enquiry = await db
             .from('enquiries')
@@ -744,8 +444,7 @@ export default class ProviderPortalController {
             data: { bookingId },
         });
     }
-    async declineEnquiry(ctx) {
-        const { params, response } = ctx;
+    async declineEnquiry({ params, response }, ctx) {
         const providerId = this.getProviderId(ctx);
         await db
             .from('enquiries')
@@ -760,8 +459,7 @@ export default class ProviderPortalController {
             message: 'Enquiry declined',
         });
     }
-    async getAvailability(ctx) {
-        const { response } = ctx;
+    async getAvailability({ response }, ctx) {
         const providerId = this.getProviderId(ctx);
         const entries = await db.from('availability').where('provider_id', providerId);
         const map = {};
@@ -778,8 +476,7 @@ export default class ProviderPortalController {
             data: map,
         });
     }
-    async setAvailability(ctx) {
-        const { request, response } = ctx;
+    async setAvailability({ request, response }, ctx) {
         const providerId = this.getProviderId(ctx);
         const { date, status } = request.all();
         if (!date) {
@@ -824,8 +521,7 @@ export default class ProviderPortalController {
             message: `Date ${date} marked as ${status}`,
         });
     }
-    async getReviews(ctx) {
-        const { response } = ctx;
+    async getReviews({ response }, ctx) {
         const providerId = this.getProviderId(ctx);
         const provider = await db.from('providers').where('id', providerId).first();
         const reviews = await db.from('reviews').where('provider_id', providerId).orderBy('id', 'desc');
@@ -836,13 +532,10 @@ export default class ProviderPortalController {
                 breakdown[r.rating]++;
             }
         }
-        const avgRating = reviews.length > 0
-            ? Number((reviews.reduce((acc, r) => acc + Number(r.rating || 0), 0) / reviews.length).toFixed(1))
-            : Number(provider?.rating || 0);
         return response.json({
             success: true,
             data: {
-                overallRating: avgRating,
+                overallRating: provider?.rating || 4.8,
                 reviewCount: reviews.length,
                 breakdown,
                 reviews: reviews.map((r) => ({
@@ -856,8 +549,7 @@ export default class ProviderPortalController {
             },
         });
     }
-    async replyReview(ctx) {
-        const { params, request, response } = ctx;
+    async replyReview({ params, request, response }, ctx) {
         const providerId = this.getProviderId(ctx);
         const { replyText } = request.all();
         if (!replyText || !String(replyText).trim()) {
@@ -885,8 +577,7 @@ export default class ProviderPortalController {
             message: 'Reply posted successfully',
         });
     }
-    async getPerformance(ctx) {
-        const { response } = ctx;
+    async getPerformance({ response }, ctx) {
         const providerId = this.getProviderId(ctx);
         const enquiriesCount = await db
             .from('enquiries')
@@ -898,161 +589,27 @@ export default class ProviderPortalController {
             .count('* as total');
         const totalEnq = Number(enquiriesCount[0]?.total || 0);
         const totalBkg = Number(bookingsCount[0]?.total || 0);
-        const convRate = totalEnq > 0 ? ((totalBkg / totalEnq) * 100).toFixed(1) : '0';
+        const convRate = totalEnq > 0 ? ((totalBkg / totalEnq) * 100).toFixed(1) : '39.7';
         return response.json({
             success: true,
             data: {
-                totalEnquiries: totalEnq,
-                bookings: totalBkg,
+                totalEnquiries: totalEnq || 146,
+                bookings: totalBkg || 58,
                 conversion: `${convRate}%`,
-                profileViews: 0,
-                monthlyEnquiries: [],
-                topServices: [],
+                profileViews: 2840,
+                monthlyEnquiries: [
+                    { month: 'May', count: 80 },
+                    { month: 'Jun', count: 105 },
+                    { month: 'Jul', count: 130 },
+                    { month: 'Aug', count: 155 },
+                    { month: 'Sep', count: 185 },
+                ],
+                topServices: [
+                    { service: 'Wedding Catering', views: 820, enquiries: 48, bookings: 21 },
+                    { service: 'Wedding Decoration', views: 590, enquiries: 32, bookings: 14 },
+                    { service: 'Reception Catering', views: 430, enquiries: 25, bookings: 11 },
+                ],
             },
-        });
-    }
-    async getLabourListings(ctx) {
-        const { response } = ctx;
-        const providerId = this.getProviderId(ctx);
-        const listings = await db
-            .from('labour_listings')
-            .where('provider_id', providerId)
-            .orderBy('id', 'desc');
-        const formatted = listings.map((l) => {
-            let parsedImages = [];
-            if (l.images) {
-                try {
-                    const arr = JSON.parse(l.images);
-                    if (Array.isArray(arr))
-                        parsedImages = arr;
-                }
-                catch {
-                    if (typeof l.images === 'string')
-                        parsedImages = [l.images];
-                }
-            }
-            return {
-                ...l,
-                coverImage: l.cover_image,
-                images: parsedImages,
-                status: (l.status || 'LIVE').toUpperCase(),
-            };
-        });
-        return response.json({
-            success: true,
-            data: formatted,
-        });
-    }
-    async createLabourListing(ctx) {
-        const { request, response } = ctx;
-        const providerId = this.getProviderId(ctx);
-        const { name, type, priceDisplay, priceAmount, details, coverImage, images, status } = request.all();
-        if (!name || !type) {
-            return response.status(422).json({
-                success: false,
-                message: 'Staff role name and category type are required',
-            });
-        }
-        const provider = await db.from('providers').where('id', providerId).first();
-        const now = new Date();
-        const priceNum = typeof priceAmount === 'number' ? priceAmount : (parseFloat(String(priceAmount || priceDisplay || '').replace(/[^0-9.]/g, '')) || 500);
-        const formattedDisplay = priceDisplay || `From ₹${priceNum} / staff`;
-        const cleanImages = Array.isArray(images)
-            ? JSON.stringify(images.filter(Boolean).slice(0, 10))
-            : null;
-        const [idRaw] = await db.table('labour_listings').insert({
-            provider_id: providerId,
-            name: name.trim(),
-            type: type.trim(),
-            provider_name: provider?.business_name || 'Verified Provider',
-            price_display: formattedDisplay,
-            price_amount: priceNum,
-            rating: provider?.rating || 0,
-            verified: Boolean(provider?.verified),
-            details: details ? details.trim() : 'Professional event staff & labour support in Rajapalayam.',
-            cover_image: coverImage || null,
-            images: cleanImages,
-            status: (status || 'LIVE').toUpperCase(),
-            created_at: now,
-            updated_at: now,
-        }).returning('id');
-        const newId = typeof idRaw === 'object' ? idRaw.id : idRaw;
-        return response.status(201).json({
-            success: true,
-            message: 'Labour service listed successfully',
-            data: { id: newId },
-        });
-    }
-    async updateLabourListing(ctx) {
-        const { params, request, response } = ctx;
-        const providerId = this.getProviderId(ctx);
-        const { name, type, priceDisplay, priceAmount, details, coverImage, images, status } = request.all();
-        const listing = await db
-            .from('labour_listings')
-            .where('id', params.id)
-            .where('provider_id', providerId)
-            .first();
-        if (!listing) {
-            return response.status(404).json({ success: false, message: 'Labour listing not found' });
-        }
-        const now = new Date();
-        const updatePayload = { updated_at: now };
-        if (name)
-            updatePayload.name = name.trim();
-        if (type)
-            updatePayload.type = type.trim();
-        if (priceDisplay)
-            updatePayload.price_display = priceDisplay;
-        if (priceAmount !== undefined)
-            updatePayload.price_amount = Number(priceAmount) || 0;
-        if (details !== undefined)
-            updatePayload.details = details.trim();
-        if (coverImage !== undefined)
-            updatePayload.cover_image = coverImage || null;
-        if (status)
-            updatePayload.status = status.toUpperCase();
-        if (Array.isArray(images)) {
-            updatePayload.images = JSON.stringify(images.filter(Boolean).slice(0, 10));
-        }
-        await db.from('labour_listings').where('id', params.id).update(updatePayload);
-        return response.json({
-            success: true,
-            message: 'Labour listing updated successfully',
-        });
-    }
-    async toggleLabourListingStatus(ctx) {
-        const { params, response } = ctx;
-        const providerId = this.getProviderId(ctx);
-        const listing = await db
-            .from('labour_listings')
-            .where('id', params.id)
-            .where('provider_id', providerId)
-            .first();
-        if (!listing) {
-            return response.status(404).json({ success: false, message: 'Labour listing not found' });
-        }
-        const nextStatus = (listing.status || 'LIVE') === 'LIVE' ? 'PAUSED' : 'LIVE';
-        await db.from('labour_listings').where('id', params.id).update({
-            status: nextStatus,
-            updated_at: new Date(),
-        });
-        return response.json({
-            success: true,
-            message: `${listing.name} is now ${nextStatus === 'LIVE' ? 'Live' : 'Paused'}`,
-            status: nextStatus,
-        });
-    }
-    async deleteLabourListing(ctx) {
-        const { params, response } = ctx;
-        const providerId = this.getProviderId(ctx);
-        await db
-            .from('labour_listings')
-            .where('id', params.id)
-            .where('provider_id', providerId)
-            .delete();
-        return response.json({
-            success: true,
-            message: 'Labour listing removed successfully',
         });
     }
 }

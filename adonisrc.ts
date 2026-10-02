@@ -16,13 +16,6 @@ export default defineConfig({
     shutdownInReverseOrder: true,
   },
 
-  metaFiles: [
-    {
-      pattern: 'database/*.backup',
-      reloadServer: false,
-    },
-  ],
-
   /*
   |--------------------------------------------------------------------------
   | Commands

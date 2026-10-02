@@ -111,6 +111,7 @@ export default class ProviderPortalController {
         experienceYears: Math.round(Number(provider.experience_years)) || 0,
         completedEvents: Math.round(Number(provider.completed_events)) || 0,
         responseTime: provider.response_time || 'Usually responds within 2 hours',
+        city: provider.city || 'Chennai',
         verified: Boolean(provider.verified),
         verificationStatus: provider.verification_status || 'VERIFIED',
         serviceAreas: areas.map((a) => a.locality),
@@ -135,6 +136,7 @@ export default class ProviderPortalController {
       about,
       phone,
       whatsapp,
+      city,
       experienceYears,
       completedEvents,
       responseTime,
@@ -156,6 +158,9 @@ export default class ProviderPortalController {
       updated_at: now,
     }
 
+    if (city !== undefined) {
+      updatePayload.city = String(city).trim()
+    }
     if (primaryCategory) {
       updatePayload.primary_category = primaryCategory
     }

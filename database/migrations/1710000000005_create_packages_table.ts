@@ -24,7 +24,7 @@ export default class extends BaseSchema {
       table.string('guest_capacity', 100).nullable()
       table.text('description').nullable()
       table.enum('status', ['LIVE', 'PAUSED', 'DRAFT']).defaultTo('LIVE')
-      table.string('cover_image', 500).nullable()
+      table.text('cover_image', 'longtext').nullable()
       table.string('icon', 50).defaultTo('📦')
       table.timestamp('created_at').notNullable()
       table.timestamp('updated_at').nullable()

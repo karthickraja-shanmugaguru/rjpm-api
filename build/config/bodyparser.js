@@ -4,7 +4,6 @@ const bodyParserConfig = defineConfig({
     form: {
         convertEmptyStringsToNull: true,
         types: ['application/x-www-form-urlencoded'],
-        limit: '50mb',
     },
     json: {
         convertEmptyStringsToNull: true,
@@ -14,13 +13,12 @@ const bodyParserConfig = defineConfig({
             'application/vnd.api+json',
             'application/csp-report',
         ],
-        limit: '50mb',
     },
     multipart: {
         autoProcess: true,
         convertEmptyStringsToNull: true,
         processManually: [],
-        limit: '50mb',
+        limit: '20mb',
         types: ['multipart/form-data'],
     },
 });

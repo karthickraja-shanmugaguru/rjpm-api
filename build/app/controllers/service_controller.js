@@ -44,45 +44,11 @@ export default class ServiceController {
             });
         }
         const images = await db.from('service_images').where('service_id', service.id).orderBy('sort_order', 'asc');
-        const areas = await db.from('provider_service_areas').where('provider_id', service.provider_id);
-        const areaNames = areas.map((a) => a.locality).filter(Boolean);
-        const resolvedArea = service.service_area_override || (areaNames.length > 0 ? areaNames.join(', ') : 'Rajapalayam');
-        const socialLinks = await db.from('provider_social_links').where('provider_id', service.provider_id);
-        const formattedSocial = socialLinks.map((s) => ({ platform: s.platform, url: s.url }));
         return response.json({
             success: true,
             data: {
                 ...service,
-                title: service.name,
-                coverImage: service.cover_image,
-                price: service.price_amount,
-                priceDisplay: service.price_display,
-                category: service.category_name,
-                serviceArea: resolvedArea,
-                serviceAreaOverride: service.service_area_override,
-                location: resolvedArea,
-                inclusions: service.inclusions,
-                terms: service.terms,
-                duration: service.duration,
-                setupTime: service.setup_time,
-                highlights: service.highlights,
-                videoUrl: service.video_url,
-                socialLinks: formattedSocial,
-                images: images.map((img) => img.image_url),
-                imageObjects: images,
-                provider: {
-                    id: service.provider_id,
-                    businessName: service.provider_name,
-                    rating: service.provider_rating,
-                    reviewCount: service.provider_reviews,
-                    verified: Boolean(service.provider_verified),
-                    phone: service.provider_phone,
-                    whatsapp: service.provider_whatsapp,
-                    location: areaNames.join(', ') || 'Rajapalayam',
-                    city: areaNames.join(', ') || 'Rajapalayam',
-                    serviceAreas: areaNames,
-                    socialLinks: formattedSocial,
-                },
+                images,
             },
         });
     }

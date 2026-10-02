@@ -12,16 +12,17 @@
 import { Env } from '@adonisjs/core/env'
 
 export default await Env.create(new URL('../', import.meta.url), {
-  NODE_ENV: Env.schema.enum.optional(['development', 'production', 'test'] as const),
-  PORT: Env.schema.number.optional(),
-  APP_KEY: Env.schema.string.optional(),
-  HOST: Env.schema.string.optional({ format: 'host' }),
-  LOG_LEVEL: Env.schema.enum.optional(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']),
+  NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
+  PORT: Env.schema.number(),
+  APP_KEY: Env.schema.string(),
+  HOST: Env.schema.string({ format: 'host' }),
+  LOG_LEVEL: Env.schema.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']),
   DB_CONNECTION: Env.schema.enum.optional(['sqlite', 'mysql'] as const),
   DB_HOST: Env.schema.string.optional({ format: 'host' }),
   DB_PORT: Env.schema.number.optional(),
   DB_USER: Env.schema.string.optional(),
   DB_PASSWORD: Env.schema.string.optional(),
   DB_DATABASE: Env.schema.string.optional(),
+  DB_SSL: Env.schema.boolean.optional(),
   JWT_SECRET: Env.schema.string.optional(),
 })

@@ -4,12 +4,6 @@ export default defineConfig({
         mergeMultipartFieldsAndFiles: true,
         shutdownInReverseOrder: true,
     },
-    metaFiles: [
-        {
-            pattern: 'database/*.backup',
-            reloadServer: false,
-        },
-    ],
     commands: [
         () => import('@adonisjs/core/commands'),
         () => import('@adonisjs/lucid/commands'),
