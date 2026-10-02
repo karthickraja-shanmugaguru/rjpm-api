@@ -21,6 +21,9 @@ router.group(() => {
     router.post('/auth/send-otp', [AuthController, 'sendOtp']);
     router.post('/auth/verify-otp', [AuthController, 'verifyOtp']);
     router.post('/auth/register-provider', [AuthController, 'registerProvider']);
+    router.post('/auth/provider/login', [AuthController, 'providerLogin']);
+    router.post('/auth/provider/signup', [AuthController, 'providerSignup']);
+    router.post('/auth/provider/reset-password', [AuthController, 'providerResetPassword']);
     router.get('/categories', [CategoryController, 'index']);
     router.get('/services', [ServiceController, 'index']);
     router.get('/services/:id', [ServiceController, 'show']);
@@ -32,6 +35,7 @@ router.group(() => {
     router.get('/providers/:id/packages', [ProviderController, 'getPackages']);
     router.get('/providers/:id/reviews', [ProviderController, 'getReviews']);
     router.get('/labour', [LabourController, 'index']);
+    router.get('/labour/:id', [LabourController, 'show']);
     router.get('/auth/me', [AuthController, 'me']).use(auth());
     router.group(() => {
         router.post('/enquiries', [CustomerController, 'createEnquiry']);
@@ -40,7 +44,7 @@ router.group(() => {
         router.get('/customer/favorites', [CustomerController, 'getFavorites']);
         router.post('/customer/favorites/toggle', [CustomerController, 'toggleFavorite']);
         router.post('/reviews', [CustomerController, 'createReview']);
-    }).use(auth()).use(role(['CUSTOMER', 'ADMIN']));
+    }).use(auth()).use(role(['CUSTOMER', 'ADMIN', 'PROVIDER']));
     router.group(() => {
         router.get('/provider/dashboard', [ProviderPortalController, 'dashboard']);
         router.get('/provider/profile', [ProviderPortalController, 'getProfile']);
@@ -55,6 +59,11 @@ router.group(() => {
         router.put('/provider/packages/:id', [ProviderPortalController, 'updatePackage']);
         router.patch('/provider/packages/:id/status', [ProviderPortalController, 'togglePackageStatus']);
         router.delete('/provider/packages/:id', [ProviderPortalController, 'deletePackage']);
+        router.get('/provider/labour', [ProviderPortalController, 'getLabourListings']);
+        router.post('/provider/labour', [ProviderPortalController, 'createLabourListing']);
+        router.put('/provider/labour/:id', [ProviderPortalController, 'updateLabourListing']);
+        router.patch('/provider/labour/:id/status', [ProviderPortalController, 'toggleLabourListingStatus']);
+        router.delete('/provider/labour/:id', [ProviderPortalController, 'deleteLabourListing']);
         router.get('/provider/enquiries', [ProviderPortalController, 'getEnquiries']);
         router.patch('/provider/enquiries/:id/accept', [ProviderPortalController, 'acceptEnquiry']);
         router.patch('/provider/enquiries/:id/decline', [ProviderPortalController, 'declineEnquiry']);
