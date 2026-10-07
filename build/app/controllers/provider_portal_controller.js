@@ -38,8 +38,8 @@ export default class ProviderPortalController {
                     newEnquiriesAction: `${Number(newEnquiriesCount[0]?.total || 0)} need your response`,
                     activeListings: Number(activeListingsCount[0]?.total || 0),
                     activeListingsNote: 'Active on marketplace',
-                    averageRating: provider?.rating || 0,
-                    reviewCount: provider?.review_count || 0,
+                    averageRating: Number(provider?.review_count || 0) > 0 ? Number(provider?.rating || 0) : 0,
+                    reviewCount: Number(provider?.review_count || 0),
                 },
                 profileCompletion: {
                     percentage: Boolean(provider?.about) && Boolean(provider?.phone) ? 100 : 50,
