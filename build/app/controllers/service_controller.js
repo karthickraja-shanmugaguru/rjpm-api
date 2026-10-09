@@ -49,7 +49,7 @@ export default class ServiceController {
             coverImage: s.cover_image,
             category: s.category_name,
             location: s.service_area_override || 'Rajapalayam',
-            providerName: s.provider_name || 'Google Search',
+            providerName: s.provider_name || '',
             rating: s.provider_rating || 4.8,
             reviewCount: s.provider_reviews || 0,
             verified: Boolean(s.provider_verified),
@@ -120,7 +120,7 @@ export default class ServiceController {
                 provider_attribution_text: resolvedAttribution,
                 provider: {
                     id: isClaimed ? service.provider_id : null,
-                    businessName: isClaimed ? (service.provider_name || 'Verified Vendor') : 'Google Search',
+                    businessName: isClaimed ? (service.provider_name || 'Verified Vendor') : (service.provider_name || ''),
                     rating: isClaimed ? service.provider_rating : 0,
                     reviewCount: isClaimed ? service.provider_reviews : 0,
                     verified: isClaimed && Boolean(service.provider_verified),
