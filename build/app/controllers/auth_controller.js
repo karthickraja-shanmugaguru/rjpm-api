@@ -21,6 +21,123 @@ function verifyPassword(password, combinedHash) {
     }
 }
 export default class AuthController {
+    async autoMergeAndClaimProvider(userId, rawPhone, fallbackData = {}) {
+        const cleanPhone = String(rawPhone || '').replace(/\D/g, '').slice(-10);
+        if (!cleanPhone || cleanPhone.length !== 10) {
+            return { claimed: false, provider: null, stats: null, message: null };
+        }
+        const now = new Date();
+        const matchingProviders = await db
+            .from('providers')
+            .where((qb) => {
+            qb.where('phone', 'like', `%${cleanPhone}%`)
+                .orWhere('whatsapp', 'like', `%${cleanPhone}%`)
+                .orWhere('user_id', userId);
+        })
+            .orderBy('id', 'asc');
+        if (matchingProviders.length === 0) {
+            const [newId] = await db.table('providers').insert({
+                user_id: userId,
+                business_name: fallbackData.businessName || 'My Event Business',
+                owner_name: fallbackData.ownerName || '',
+                primary_category: fallbackData.primaryCategory || 'Event Planning',
+                rating: 0,
+                review_count: 0,
+                experience_years: 1,
+                completed_events: '0',
+                verified: false,
+                verification_status: 'APPROVED',
+                provider_status: 'CLAIMED_ACTIVE',
+                claimed: true,
+                source: 'DIRECT_SIGNUP',
+                about: '',
+                phone: '+91 ' + cleanPhone,
+                whatsapp: '+91 ' + cleanPhone,
+                created_at: now,
+                updated_at: now,
+            }).returning('id');
+            const createdId = typeof newId === 'object' ? newId.id : newId;
+            const createdProvider = await db.from('providers').where('id', createdId).first();
+            await db.from('services').whereNull('provider_id').where((qb) => {
+                qb.where('phone', 'like', `%${cleanPhone}%`).orWhere('whatsapp', 'like', `%${cleanPhone}%`);
+            }).update({ provider_id: createdId, updated_at: now });
+            await db.from('packages').whereNull('provider_id').where((qb) => {
+                qb.where('phone', 'like', `%${cleanPhone}%`).orWhere('whatsapp', 'like', `%${cleanPhone}%`);
+            }).update({ provider_id: createdId, updated_at: now });
+            await db.from('labour_listings').whereNull('provider_id').where((qb) => {
+                qb.where('phone', 'like', `%${cleanPhone}%`).orWhere('whatsapp', 'like', `%${cleanPhone}%`);
+            }).update({ provider_id: createdId, updated_at: now });
+            return {
+                claimed: false,
+                provider: createdProvider,
+                stats: null,
+                message: 'Provider profile initialized successfully',
+            };
+        }
+        let primary = matchingProviders.find((p) => p.user_id === userId);
+        if (!primary) {
+            primary = matchingProviders[0];
+        }
+        const duplicates = matchingProviders.filter((p) => p.id !== primary.id);
+        for (const dup of duplicates) {
+            await db.from('services').where('provider_id', dup.id).update({ provider_id: primary.id });
+            await db.from('packages').where('provider_id', dup.id).update({ provider_id: primary.id });
+            await db.from('labour_listings').where('provider_id', dup.id).update({ provider_id: primary.id });
+            await db.from('enquiries').where('provider_id', dup.id).update({ provider_id: primary.id });
+            await db.from('reviews').where('provider_id', dup.id).update({ provider_id: primary.id });
+            await db.from('provider_service_areas').where('provider_id', dup.id).update({ provider_id: primary.id });
+            await db.from('providers').where('id', dup.id).delete();
+        }
+        await db.from('services').whereNull('provider_id').where((qb) => {
+            qb.where('phone', 'like', `%${cleanPhone}%`).orWhere('whatsapp', 'like', `%${cleanPhone}%`);
+        }).update({ provider_id: primary.id, updated_at: now });
+        await db.from('packages').whereNull('provider_id').where((qb) => {
+            qb.where('phone', 'like', `%${cleanPhone}%`).orWhere('whatsapp', 'like', `%${cleanPhone}%`);
+        }).update({ provider_id: primary.id, updated_at: now });
+        await db.from('labour_listings').whereNull('provider_id').where((qb) => {
+            qb.where('phone', 'like', `%${cleanPhone}%`).orWhere('whatsapp', 'like', `%${cleanPhone}%`);
+        }).update({ provider_id: primary.id, updated_at: now });
+        const updatePayload = {
+            user_id: userId,
+            claimed: true,
+            provider_status: 'CLAIMED_ACTIVE',
+            verified: true,
+            verification_status: 'APPROVED',
+            phone: '+91 ' + cleanPhone,
+            whatsapp: primary.whatsapp || ('+91 ' + cleanPhone),
+            updated_at: now,
+        };
+        if (fallbackData.businessName && fallbackData.businessName.trim()) {
+            updatePayload.business_name = fallbackData.businessName.trim();
+        }
+        if (fallbackData.ownerName && fallbackData.ownerName.trim()) {
+            updatePayload.owner_name = fallbackData.ownerName.trim();
+        }
+        if (fallbackData.primaryCategory && fallbackData.primaryCategory.trim()) {
+            updatePayload.primary_category = fallbackData.primaryCategory.trim();
+        }
+        await db.from('providers').where('id', primary.id).update(updatePayload);
+        const updatedProvider = await db.from('providers').where('id', primary.id).first();
+        const [svcRow] = await db.from('services').where('provider_id', primary.id).count('* as total');
+        const [pkgRow] = await db.from('packages').where('provider_id', primary.id).count('* as total');
+        const [labourRow] = await db.from('labour_listings').where('provider_id', primary.id).count('* as total');
+        const servicesCount = Number(svcRow?.total || 0);
+        const packagesCount = Number(pkgRow?.total || 0);
+        const laboursCount = Number(labourRow?.total || 0);
+        const totalListings = servicesCount + packagesCount + laboursCount;
+        return {
+            claimed: true,
+            provider: updatedProvider,
+            stats: {
+                servicesCount,
+                packagesCount,
+                laboursCount,
+                totalListings,
+                businessName: updatedProvider.business_name,
+            },
+            message: `Account claimed & verified! Found ${totalListings} listings automatically attached to your profile.`,
+        };
+    }
     async sendOtp({ request, response }) {
         const { phone } = request.only(['phone']);
         if (!phone || String(phone).trim().length !== 10) {
@@ -94,38 +211,30 @@ export default class AuthController {
             }
         }
         let provider = null;
+        let autoClaimResult = null;
         if (user.role === 'PROVIDER' || role === 'PROVIDER') {
-            provider = await db.from('providers').where('user_id', user.id).first();
-            if (!provider) {
-                const [pId] = await db.table('providers').insert({
-                    user_id: user.id,
-                    business_name: businessName || (user.name ? `${user.name} Events` : 'My Event Business'),
-                    owner_name: user.name || '',
-                    primary_category: primaryCategory || 'Event Planning',
-                    rating: 0,
-                    review_count: 0,
-                    experience_years: 0,
-                    completed_events: '0',
-                    verified: false,
-                    verification_status: 'APPROVED',
-                    about: '',
-                    phone: '+91 ' + cleanPhone,
-                    whatsapp: '+91 ' + cleanPhone,
-                    created_at: now,
-                    updated_at: now,
-                }).returning('id');
-                const createdId = typeof pId === 'object' ? pId.id : pId;
-                provider = await db.from('providers').where('id', createdId).first();
-            }
+            const claimResult = await this.autoMergeAndClaimProvider(user.id, cleanPhone, {
+                businessName,
+                primaryCategory,
+            });
+            provider = claimResult.provider;
+            autoClaimResult = claimResult;
         }
         const secret = env.get('JWT_SECRET', 'evently_jwt_secret_key_super_secure_2026');
         const token = jwt.sign({ userId: user.id, phone: user.phone, role: user.role }, secret, { expiresIn: '30d' });
+        const returnMessage = autoClaimResult?.claimed
+            ? autoClaimResult.message
+            : isExistingUser
+                ? 'Welcome back! Logged in successfully.'
+                : 'Account created successfully.';
         return response.json({
             success: true,
-            message: isExistingUser ? 'Welcome back! Logged in successfully.' : 'Account created successfully.',
+            message: returnMessage,
             data: {
                 isExistingUser,
                 token,
+                autoClaimed: Boolean(autoClaimResult?.claimed),
+                claimedStats: autoClaimResult?.stats || null,
                 user: {
                     id: user.id,
                     phone: user.phone,
@@ -144,6 +253,9 @@ export default class AuthController {
                         rating: provider.rating,
                         reviewCount: provider.review_count,
                         verified: Boolean(provider.verified),
+                        providerStatus: provider.provider_status,
+                        claimed: Boolean(provider.claimed),
+                        source: provider.source,
                     }
                     : null,
             },
@@ -184,30 +296,21 @@ export default class AuthController {
                 updated_at: now,
             });
         }
-        let provider = await db.from('providers').where('user_id', user.id).first();
-        if (!provider) {
-            const [pId] = await db.table('providers').insert({
-                user_id: user.id,
-                business_name: businessName,
-                owner_name: ownerName || '',
-                primary_category: primaryCategory || 'Event Planning',
-                phone: '+91 ' + cleanPhone,
-                whatsapp: '+91 ' + cleanPhone,
-                verified: false,
-                verification_status: 'PENDING',
-                created_at: now,
-                updated_at: now,
-            }).returning('id');
-            const providerId = typeof pId === 'object' ? pId.id : pId;
-            provider = await db.from('providers').where('id', providerId).first();
-        }
+        const autoClaimResult = await this.autoMergeAndClaimProvider(user.id, cleanPhone, {
+            businessName,
+            ownerName,
+            primaryCategory,
+        });
+        const provider = autoClaimResult.provider;
         const secret = env.get('JWT_SECRET', 'evently_jwt_secret_key_super_secure_2026');
         const token = jwt.sign({ userId: user.id, phone: user.phone, role: 'PROVIDER' }, secret, { expiresIn: '30d' });
         return response.json({
             success: true,
-            message: 'Provider registration completed',
+            message: autoClaimResult?.claimed ? autoClaimResult.message : 'Provider registration completed',
             data: {
                 token,
+                autoClaimed: Boolean(autoClaimResult?.claimed),
+                claimedStats: autoClaimResult?.stats || null,
                 user,
                 provider,
             },
@@ -271,44 +374,21 @@ export default class AuthController {
             });
             user = await db.from('users').where('id', user.id).first();
         }
-        let provider = await db.from('providers').where('user_id', user.id).first();
-        if (!provider) {
-            const [pId] = await db.table('providers').insert({
-                user_id: user.id,
-                business_name: String(businessName).trim(),
-                owner_name: cleanOwnerName,
-                primary_category: primaryCategory || 'Event Planning',
-                rating: 0,
-                review_count: 0,
-                experience_years: 1,
-                completed_events: '0',
-                verified: false,
-                verification_status: 'APPROVED',
-                about: '',
-                phone: '+91 ' + cleanPhone,
-                whatsapp: '+91 ' + cleanPhone,
-                created_at: now,
-                updated_at: now,
-            }).returning('id');
-            const providerId = typeof pId === 'object' ? pId.id : pId;
-            provider = await db.from('providers').where('id', providerId).first();
-        }
-        else {
-            await db.from('providers').where('id', provider.id).update({
-                business_name: String(businessName).trim(),
-                owner_name: cleanOwnerName,
-                primary_category: primaryCategory || provider.primary_category,
-                updated_at: now,
-            });
-            provider = await db.from('providers').where('id', provider.id).first();
-        }
+        const autoClaimResult = await this.autoMergeAndClaimProvider(user.id, cleanPhone, {
+            businessName: String(businessName).trim(),
+            ownerName: cleanOwnerName,
+            primaryCategory,
+        });
+        const provider = autoClaimResult.provider;
         const secret = env.get('JWT_SECRET', 'evently_jwt_secret_key_super_secure_2026');
         const token = jwt.sign({ userId: user.id, phone: user.phone, role: user.role }, secret, { expiresIn: '30d' });
         return response.json({
             success: true,
-            message: 'Provider account created successfully!',
+            message: autoClaimResult?.claimed ? autoClaimResult.message : 'Provider account created successfully!',
             data: {
                 token,
+                autoClaimed: Boolean(autoClaimResult?.claimed),
+                claimedStats: autoClaimResult?.stats || null,
                 user: {
                     id: user.id,
                     phone: user.phone,
@@ -325,6 +405,9 @@ export default class AuthController {
                     rating: provider.rating,
                     reviewCount: provider.review_count,
                     verified: Boolean(provider.verified),
+                    providerStatus: provider.provider_status,
+                    claimed: Boolean(provider.claimed),
+                    source: provider.source,
                 },
             },
         });
@@ -374,29 +457,8 @@ export default class AuthController {
             });
             user.role = 'PROVIDER';
         }
-        let provider = await db.from('providers').where('user_id', user.id).first();
-        if (!provider) {
-            const now = new Date();
-            const [pId] = await db.table('providers').insert({
-                user_id: user.id,
-                business_name: user.name ? `${user.name} Events` : 'My Event Business',
-                owner_name: user.name || '',
-                primary_category: 'Event Planning',
-                rating: 0,
-                review_count: 0,
-                experience_years: 1,
-                completed_events: '0',
-                verified: false,
-                verification_status: 'APPROVED',
-                about: '',
-                phone: '+91 ' + cleanPhone,
-                whatsapp: '+91 ' + cleanPhone,
-                created_at: now,
-                updated_at: now,
-            }).returning('id');
-            const providerId = typeof pId === 'object' ? pId.id : pId;
-            provider = await db.from('providers').where('id', providerId).first();
-        }
+        const claimResult = await this.autoMergeAndClaimProvider(user.id, cleanPhone);
+        const provider = claimResult.provider;
         const secret = env.get('JWT_SECRET', 'evently_jwt_secret_key_super_secure_2026');
         const token = jwt.sign({ userId: user.id, phone: user.phone, role: user.role }, secret, { expiresIn: '30d' });
         return response.json({
@@ -464,7 +526,11 @@ export default class AuthController {
     }
     async me(ctx) {
         const user = ctx.authUser;
-        const provider = ctx.authProvider;
+        let provider = ctx.authProvider;
+        if (!provider && user?.role === 'PROVIDER' && user?.phone) {
+            const claimResult = await this.autoMergeAndClaimProvider(user.id, user.phone);
+            provider = claimResult.provider;
+        }
         return ctx.response.json({
             success: true,
             data: {

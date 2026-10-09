@@ -2,7 +2,11 @@ import db from '@adonisjs/lucid/services/db';
 export default class ProviderController {
     async index({ request, response }) {
         const { category, search, verified, city } = request.qs();
-        let query = db.from('providers').select('*');
+        let query = db
+            .from('providers')
+            .where('claimed', true)
+            .where('provider_status', 'CLAIMED_ACTIVE')
+            .select('*');
         if (category && category !== 'All') {
             query = query.where('primary_category', category);
         }
@@ -28,8 +32,12 @@ export default class ProviderController {
         }
         const providers = await query.orderBy('rating', 'desc');
         const providerIds = providers.map((p) => p.id);
-        const services = await db.from('services').whereIn('provider_id', providerIds).where('status', 'LIVE');
-        const areas = await db.from('provider_service_areas').whereIn('provider_id', providerIds);
+        const services = providerIds.length > 0
+            ? await db.from('services').whereIn('provider_id', providerIds).where('status', 'LIVE')
+            : [];
+        const areas = providerIds.length > 0
+            ? await db.from('provider_service_areas').whereIn('provider_id', providerIds)
+            : [];
         const result = providers.map((p) => {
             const pServices = services.filter((s) => s.provider_id === p.id);
             const startingPrice = pServices.length > 0 ? pServices[0].price_display : 'On request';
@@ -51,23 +59,45 @@ export default class ProviderController {
                 experience: `${p.experience_years} yrs`,
                 completedEvents: cleanCompleted,
                 verified: Boolean(p.verified),
+                claimed: Boolean(p.claimed),
+                providerStatus: p.provider_status || (p.claimed ? 'CLAIMED_ACTIVE' : 'SHADOW'),
+                source: p.source || 'DIRECT_SIGNUP',
+                attributionText: p.attribution_text || (p.claimed ? 'Verified Business Partner' : 'Public Listing • Powered by Google Search / Web Source'),
                 price: startingPrice,
                 serviceCount: pServices.length,
                 coverImage: p.cover_image,
                 logoImage: p.logo_image,
+                phone: p.phone,
             };
         });
+        const phoneMap = new Map();
+        for (const p of result) {
+            const cleanDigits = String(p.phone || '').replace(/\D/g, '').slice(-10);
+            if (!cleanDigits) {
+                phoneMap.set(`id_${p.id}`, p);
+                continue;
+            }
+            if (!phoneMap.has(cleanDigits)) {
+                phoneMap.set(cleanDigits, p);
+            }
+            else {
+                const existing = phoneMap.get(cleanDigits);
+                if (p.claimed && !existing.claimed) {
+                    phoneMap.set(cleanDigits, p);
+                }
+            }
+        }
         return response.json({
             success: true,
-            data: result,
+            data: Array.from(phoneMap.values()),
         });
     }
     async show({ params, response }) {
         const provider = await db.from('providers').where('id', params.id).first();
-        if (!provider) {
+        if (!provider || !provider.claimed || provider.provider_status === 'SHADOW') {
             return response.status(404).json({
                 success: false,
-                message: 'Provider not found',
+                message: 'Business profile not found',
             });
         }
         const areas = await db.from('provider_service_areas').where('provider_id', provider.id);
@@ -121,6 +151,10 @@ export default class ProviderController {
                 about: provider.about,
                 verified: Boolean(provider.verified),
                 verificationStatus: provider.verification_status || (provider.verified ? 'VERIFIED' : 'PENDING'),
+                claimed: Boolean(provider.claimed),
+                providerStatus: provider.provider_status || (provider.claimed ? 'CLAIMED_ACTIVE' : 'SHADOW'),
+                source: provider.source || 'DIRECT_SIGNUP',
+                attributionText: provider.attribution_text || (provider.claimed ? 'Verified Business Partner' : 'Public Listing • Powered by Google Search / Web Source'),
                 phone: provider.phone,
                 whatsapp: provider.whatsapp,
                 coverImage: provider.cover_image,

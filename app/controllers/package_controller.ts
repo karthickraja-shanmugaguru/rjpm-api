@@ -7,14 +7,21 @@ export default class PackageController {
 
     let query = db
       .from('packages')
-      .join('providers', 'packages.provider_id', 'providers.id')
+      .leftJoin('providers', 'packages.provider_id', 'providers.id')
       .where('packages.status', 'LIVE')
       .select(
         'packages.*',
+        'packages.phone as package_phone',
+        'packages.whatsapp as package_whatsapp',
+        'packages.attribution_text as package_attribution_text',
         'providers.business_name as provider_name',
         'providers.rating as provider_rating',
         'providers.review_count as provider_reviews',
-        'providers.verified as provider_verified'
+        'providers.verified as provider_verified',
+        'providers.provider_status as provider_status',
+        'providers.claimed as provider_claimed',
+        'providers.source as provider_source',
+        'providers.attribution_text as provider_attribution_text'
       )
 
     if (eventType && eventType !== 'All Packages') {
@@ -56,6 +63,16 @@ export default class PackageController {
       const images = packageImages.filter((img) => img.package_id === pkg.id).map((img) => img.image_url)
       const includesText = services.map((s) => s.service_name).join(' · ')
       const priceNum = Number(pkg.price_amount) || parseFloat(String(pkg.price_display || '').replace(/[^0-9.]/g, '')) || 0
+      const isClaimed = Boolean(
+        Number(pkg.provider_claimed) === 1 &&
+        pkg.provider_status === 'CLAIMED_ACTIVE' &&
+        pkg.provider_id
+      )
+      const resolvedAttribution =
+        pkg.attribution_text ||
+        pkg.package_attribution_text ||
+        pkg.provider_attribution_text ||
+        (isClaimed ? null : 'Public Listing • Powered by Google Search')
 
       return {
         ...pkg,
@@ -77,6 +94,11 @@ export default class PackageController {
         images,
         services,
         includes: includesText || pkg.description || 'Full celebration package',
+        is_claimed: isClaimed,
+        provider_claimed: isClaimed,
+        provider_status: isClaimed ? 'CLAIMED_ACTIVE' : 'SHADOW',
+        provider_name: isClaimed ? (pkg.provider_name || 'Verified Vendor') : 'Google Search',
+        attribution_text: resolvedAttribution,
       }
     })
 
@@ -89,14 +111,21 @@ export default class PackageController {
   async show({ params, response }: HttpContext) {
     const pkg = await db
       .from('packages')
-      .join('providers', 'packages.provider_id', 'providers.id')
+      .leftJoin('providers', 'packages.provider_id', 'providers.id')
       .where('packages.id', params.id)
       .select(
         'packages.*',
+        'packages.phone as package_phone',
+        'packages.whatsapp as package_whatsapp',
+        'packages.attribution_text as package_attribution_text',
         'providers.business_name as provider_name',
         'providers.rating as provider_rating',
         'providers.review_count as provider_reviews',
         'providers.verified as provider_verified',
+        'providers.provider_status as provider_status',
+        'providers.claimed as provider_claimed',
+        'providers.source as provider_source',
+        'providers.attribution_text as provider_attribution_text',
         'providers.phone as provider_phone',
         'providers.whatsapp as provider_whatsapp'
       )
@@ -130,6 +159,18 @@ export default class PackageController {
     ])
 
     const priceNum = Number(pkg.price_amount) || parseFloat(String(pkg.price_display || '').replace(/[^0-9.]/g, '')) || 0
+    const resolvedPhone = pkg.phone || pkg.package_phone || pkg.provider_phone || ''
+    const resolvedWhatsapp = pkg.whatsapp || pkg.package_whatsapp || pkg.provider_whatsapp || resolvedPhone || ''
+    const isClaimed = Boolean(
+      Number(pkg.provider_claimed) === 1 &&
+      pkg.provider_status === 'CLAIMED_ACTIVE' &&
+      pkg.provider_id
+    )
+    const resolvedAttribution =
+      pkg.attribution_text ||
+      pkg.package_attribution_text ||
+      pkg.provider_attribution_text ||
+      (isClaimed ? null : 'Public Listing • Powered by Google Search')
 
     return response.json({
       success: true,
@@ -153,6 +194,24 @@ export default class PackageController {
         images: images.map((img) => img.image_url),
         services,
         includes: services.map((s) => s.name).join(' · '),
+        phone: resolvedPhone,
+        whatsapp: resolvedWhatsapp,
+        attribution_text: resolvedAttribution,
+        is_claimed: isClaimed,
+        provider_claimed: isClaimed,
+        provider_status: isClaimed ? 'CLAIMED_ACTIVE' : 'SHADOW',
+        provider: {
+          id: isClaimed ? pkg.provider_id : null,
+          businessName: isClaimed ? (pkg.provider_name || 'Verified Vendor') : 'Google Search',
+          rating: isClaimed ? pkg.provider_rating : 0,
+          reviewCount: isClaimed ? pkg.provider_reviews : 0,
+          verified: isClaimed && Boolean(pkg.provider_verified),
+          claimed: isClaimed,
+          status: isClaimed ? 'CLAIMED_ACTIVE' : 'SHADOW',
+          phone: resolvedPhone,
+          whatsapp: resolvedWhatsapp,
+          attributionText: resolvedAttribution,
+        },
       },
     })
   }

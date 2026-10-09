@@ -6,7 +6,7 @@ export default class LabourController {
         let query = db
             .from('labour_listings')
             .leftJoin('providers', 'labour_listings.provider_id', 'providers.id')
-            .select('labour_listings.*', 'providers.phone as provider_phone', 'providers.whatsapp as provider_whatsapp', 'providers.rating as provider_rating', 'providers.verified as provider_verified');
+            .select('labour_listings.*', 'providers.phone as provider_phone', 'providers.whatsapp as provider_whatsapp', 'providers.rating as provider_rating', 'providers.verified as provider_verified', 'providers.provider_status as provider_status', 'providers.claimed as provider_claimed', 'providers.source as provider_source', 'providers.attribution_text as provider_attribution_text');
         if (selectedType && selectedType !== 'All Labour') {
             query = query.where('labour_listings.type', selectedType);
         }
@@ -48,7 +48,7 @@ export default class LabourController {
             .from('labour_listings')
             .leftJoin('providers', 'labour_listings.provider_id', 'providers.id')
             .where('labour_listings.id', params.id)
-            .select('labour_listings.*', 'providers.phone as provider_phone', 'providers.whatsapp as provider_whatsapp', 'providers.rating as provider_rating', 'providers.verified as provider_verified')
+            .select('labour_listings.*', 'providers.phone as provider_phone', 'providers.whatsapp as provider_whatsapp', 'providers.rating as provider_rating', 'providers.verified as provider_verified', 'providers.provider_status as provider_status', 'providers.claimed as provider_claimed', 'providers.source as provider_source', 'providers.attribution_text as provider_attribution_text')
             .first();
         if (!item) {
             return response.status(404).json({

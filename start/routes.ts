@@ -7,6 +7,7 @@ import ProviderController from '#controllers/provider_controller'
 import LabourController from '#controllers/labour_controller'
 import CustomerController from '#controllers/customer_controller'
 import ProviderPortalController from '#controllers/provider_portal_controller'
+import AdminController from '#controllers/admin_controller'
 import AuthMiddleware from '#middleware/auth_middleware'
 import RoleMiddleware from '#middleware/role_middleware'
 
@@ -117,5 +118,43 @@ router.group(() => {
     router.post('/reviews/:id/reply', [ProviderPortalController, 'replyReview'])
     router.get('/provider/performance', [ProviderPortalController, 'getPerformance'])
   }).use(auth()).use(role(['PROVIDER', 'ADMIN']))
+
+  /* =========================================================================
+     ADMIN ROUTES (Role: ADMIN)
+     ========================================================================= */
+  // Public Admin Login
+  router.post('/admin/login', [AdminController, 'login'])
+
+  // Authenticated SuperAdmin Endpoints
+  router.group(() => {
+    // Admin Info & Metrics
+    router.get('/admin/me', [AdminController, 'me'])
+    router.get('/admin/dashboard', [AdminController, 'dashboard'])
+
+    // User Management
+    router.get('/admin/users', [AdminController, 'getUsers'])
+    router.patch('/admin/users/:id/status', [AdminController, 'updateUserStatus'])
+    router.delete('/admin/users/:id', [AdminController, 'deleteUser'])
+
+    // Partner / Vendor Directory & Shadow Profiles
+    router.get('/admin/partners', [AdminController, 'getPartners'])
+    router.post('/admin/partners', [AdminController, 'createPartner'])
+    router.get('/admin/partners/:id', [AdminController, 'getPartnerDetails'])
+    router.put('/admin/partners/:id', [AdminController, 'updatePartner'])
+    router.delete('/admin/partners/:id', [AdminController, 'deletePartner'])
+    router.post('/admin/partners/merge', [AdminController, 'mergePartners'])
+
+    // Services, Packages & Labour Catalog Management
+    router.get('/admin/services', [AdminController, 'getServices'])
+    router.post('/admin/services', [AdminController, 'createService'])
+    router.put('/admin/services/:id', [AdminController, 'updateService'])
+    router.delete('/admin/services/:id', [AdminController, 'deleteService'])
+
+    router.put('/admin/packages/:id', [AdminController, 'updatePackage'])
+    router.delete('/admin/packages/:id', [AdminController, 'deletePackage'])
+
+    router.put('/admin/labour/:id', [AdminController, 'updateLabour'])
+    router.delete('/admin/labour/:id', [AdminController, 'deleteLabour'])
+  }).use(auth()).use(role(['ADMIN']))
 
 }).prefix('/api')

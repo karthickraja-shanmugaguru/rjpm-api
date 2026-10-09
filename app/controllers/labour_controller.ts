@@ -14,7 +14,11 @@ export default class LabourController {
         'providers.phone as provider_phone',
         'providers.whatsapp as provider_whatsapp',
         'providers.rating as provider_rating',
-        'providers.verified as provider_verified'
+        'providers.verified as provider_verified',
+        'providers.provider_status as provider_status',
+        'providers.claimed as provider_claimed',
+        'providers.source as provider_source',
+        'providers.attribution_text as provider_attribution_text'
       )
 
     if (selectedType && selectedType !== 'All Labour') {
@@ -65,7 +69,11 @@ export default class LabourController {
         'providers.phone as provider_phone',
         'providers.whatsapp as provider_whatsapp',
         'providers.rating as provider_rating',
-        'providers.verified as provider_verified'
+        'providers.verified as provider_verified',
+        'providers.provider_status as provider_status',
+        'providers.claimed as provider_claimed',
+        'providers.source as provider_source',
+        'providers.attribution_text as provider_attribution_text'
       )
       .first()
 

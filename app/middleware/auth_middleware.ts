@@ -31,6 +31,28 @@ export default class AuthMiddleware {
       let provider = null
       if (user.role === 'PROVIDER') {
         provider = await db.from('providers').where('user_id', user.id).first()
+        if (!provider && user.phone) {
+          const cleanPhone = String(user.phone).replace(/\D/g, '').slice(-10)
+          const matched = await db
+            .from('providers')
+            .where((qb: any) => {
+              qb.where('phone', 'like', `%${cleanPhone}%`)
+                .orWhere('whatsapp', 'like', `%${cleanPhone}%`)
+            })
+            .orderBy('id', 'asc')
+            .first()
+
+          if (matched) {
+            await db.from('providers').where('id', matched.id).update({
+              user_id: user.id,
+              claimed: true,
+              provider_status: 'CLAIMED_ACTIVE',
+              verified: true,
+              updated_at: new Date(),
+            })
+            provider = await db.from('providers').where('id', matched.id).first()
+          }
+        }
       }
 
       // Attach user & provider to ctx
