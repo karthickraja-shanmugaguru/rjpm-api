@@ -59,6 +59,7 @@ export default class AuthController {
         business_name: fallbackData.businessName || 'My Event Business',
         owner_name: fallbackData.ownerName || '',
         primary_category: fallbackData.primaryCategory || 'Event Planning',
+        city: fallbackData.city || 'Rajapalayam',
         rating: 0,
         review_count: 0,
         experience_years: 1,
@@ -77,6 +78,14 @@ export default class AuthController {
 
       const createdId = typeof newId === 'object' ? (newId as any).id : newId
       const createdProvider = await db.from('providers').where('id', createdId).first()
+
+      // Add default service area for new provider
+      await db.table('provider_service_areas').insert({
+        provider_id: createdId,
+        locality: 'All Rajapalayam Areas',
+        created_at: now,
+        updated_at: now,
+      })
 
       // Re-parent any standalone listings created with this phone number
       await db.from('services').whereNull('provider_id').where((qb: any) => {

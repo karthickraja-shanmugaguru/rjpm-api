@@ -636,7 +636,18 @@ export default class AdminController {
       }
 
       const svcList = await q.orderBy('services.id', 'desc')
-      items.push(...svcList.map((s: any) => ({ ...s, entityType: 'SERVICE' })))
+      const svcIds = svcList.map((s: any) => s.id)
+      const allSvcImages = svcIds.length > 0
+        ? await db.from('service_images').whereIn('service_id', svcIds).orderBy('sort_order', 'asc')
+        : []
+
+      items.push(
+        ...svcList.map((s: any) => ({
+          ...s,
+          images: allSvcImages.filter((img: any) => img.service_id === s.id).map((img: any) => img.image_url),
+          entityType: 'SERVICE',
+        }))
+      )
     }
 
     // 2. Packages
@@ -665,11 +676,19 @@ export default class AdminController {
       }
 
       const pkgList = await q.orderBy('packages.id', 'desc')
-      items.push(...pkgList.map((p: any) => ({
-        ...p,
-        category_name: p.event_type || 'Package Bundle',
-        entityType: 'PACKAGE',
-      })))
+      const pkgIds = pkgList.map((p: any) => p.id)
+      const allPkgImages = pkgIds.length > 0
+        ? await db.from('package_images').whereIn('package_id', pkgIds).orderBy('sort_order', 'asc')
+        : []
+
+      items.push(
+        ...pkgList.map((p: any) => ({
+          ...p,
+          images: allPkgImages.filter((img: any) => img.package_id === p.id).map((img: any) => img.image_url),
+          category_name: p.event_type || 'Package Bundle',
+          entityType: 'PACKAGE',
+        }))
+      )
     }
 
     // 3. Labour

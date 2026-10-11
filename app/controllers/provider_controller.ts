@@ -14,7 +14,12 @@ export default class ProviderController {
       .select('*')
 
     if (category && category !== 'All') {
-      query = query.where('primary_category', category)
+      const qCat = String(category).trim().toLowerCase()
+      const baseStem = qCat.split('/')[0].split('&')[0].trim()
+      query = query.where((sub) => {
+        sub.whereILike('primary_category', `%${qCat}%`)
+          .orWhereILike('primary_category', `%${baseStem}%`)
+      })
     }
 
     if (search && String(search).trim()) {
@@ -32,12 +37,25 @@ export default class ProviderController {
       const cityClean = String(city).trim().toLowerCase()
       const matchingProviderIds = await db
         .from('provider_service_areas')
-        .whereILike('locality', `%${cityClean}%`)
+        .where((sub) => {
+          sub.whereILike('locality', `%${cityClean}%`)
+            .orWhereILike('locality', '%all%')
+            .orWhereILike('locality', '%entire%')
+        })
         .select('provider_id')
       const pIds = matchingProviderIds.map((m) => m.provider_id)
-      if (pIds.length > 0) {
-        query = query.whereIn('id', pIds)
-      }
+
+      query = query.where((sub) => {
+        if (pIds.length > 0) {
+          sub.whereIn('id', pIds)
+        }
+        sub.orWhereILike('city', `%${cityClean}%`)
+        if (cityClean === 'rajapalayam') {
+          sub.orWhereNull('city')
+            .orWhere('city', '')
+            .orWhereNotIn('id', db.from('provider_service_areas').select('provider_id'))
+        }
+      })
     }
 
     const providers = await query.orderBy('rating', 'desc')

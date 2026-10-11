@@ -342,7 +342,7 @@ export default class ProviderPortalController {
       pricing_type: pricingType,
       price_display: formattedDisplay,
       price_amount: priceNum,
-      cover_image: coverImage || null,
+      cover_image: coverImage || (Array.isArray(images) && images.length > 0 ? (typeof images[0] === 'string' ? images[0] : images[0]?.image_url) : null),
       icon: '✨',
       status: (status || 'LIVE').toUpperCase(),
       service_area_override: serviceAreaOverride || null,
