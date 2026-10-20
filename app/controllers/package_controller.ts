@@ -1,9 +1,16 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
+import apiCache from '../utils/cache.js'
 
 export default class PackageController {
   async index({ request, response }: HttpContext) {
     const { eventType, search } = request.qs()
+
+    const cacheKey = apiCache.makeKey('packages', { eventType, search })
+    const cached = apiCache.get(cacheKey)
+    if (cached) {
+      return response.json(cached)
+    }
 
     let query = db
       .from('packages')
@@ -102,10 +109,12 @@ export default class PackageController {
       }
     })
 
-    return response.json({
+    const payload = {
       success: true,
       data: result,
-    })
+    }
+    apiCache.set(cacheKey, payload, 60)
+    return response.json(payload)
   }
 
   async show({ params, response }: HttpContext) {

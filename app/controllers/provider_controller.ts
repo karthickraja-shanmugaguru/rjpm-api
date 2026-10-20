@@ -1,9 +1,16 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
+import apiCache from '../utils/cache.js'
 
 export default class ProviderController {
   async index({ request, response }: HttpContext) {
     const { category, search, verified, city } = request.qs()
+
+    const cacheKey = apiCache.makeKey('providers', { category, search, verified, city })
+    const cached = apiCache.get(cacheKey)
+    if (cached) {
+      return response.json(cached)
+    }
 
     // Curated shadow listings without a claimed account do NOT have public business profiles.
     // Only return registered, claimed, active businesses.
@@ -16,9 +23,41 @@ export default class ProviderController {
     if (category && category !== 'All') {
       const qCat = String(category).trim().toLowerCase()
       const baseStem = qCat.split('/')[0].split('&')[0].trim()
+
+      const relatedTerms = [qCat, baseStem]
+      if (qCat.includes('sweet') || qCat.includes('dessert') || qCat.includes('snack') || qCat.includes('cake') || qCat.includes('bakery')) {
+        relatedTerms.push('cake', 'bakery', 'sweet', 'dessert', 'snack')
+      }
+      if (qCat.includes('tailor') || qCat.includes('saree') || qCat.includes('fashion') || qCat.includes('costume')) {
+        relatedTerms.push('tailor', 'fashion', 'boutique', 'saree', 'costume')
+      }
+      if (qCat.includes('makeup') || qCat.includes('hair') || qCat.includes('beauty')) {
+        relatedTerms.push('makeup', 'hair', 'beauty', 'salon')
+      }
+      if (qCat.includes('mehendi') || qCat.includes('mehndi') || qCat.includes('henna')) {
+        relatedTerms.push('mehendi', 'mehandi', 'mehndi', 'henna')
+      }
+
+      // Find providers who offer live services in this category
+      const serviceProviderIds = await db
+        .from('services')
+        .where('status', 'LIVE')
+        .where((sub) => {
+          for (const term of relatedTerms) {
+            sub.orWhereILike('category_name', `%${term}%`)
+              .orWhereILike('name', `%${term}%`)
+          }
+        })
+        .select('provider_id')
+      const pIdsFromServices = serviceProviderIds.map((s) => s.provider_id)
+
       query = query.where((sub) => {
-        sub.whereILike('primary_category', `%${qCat}%`)
-          .orWhereILike('primary_category', `%${baseStem}%`)
+        for (const term of relatedTerms) {
+          sub.orWhereILike('primary_category', `%${term}%`)
+        }
+        if (pIdsFromServices.length > 0) {
+          sub.orWhereIn('id', pIdsFromServices)
+        }
       })
     }
 
@@ -122,10 +161,12 @@ export default class ProviderController {
       }
     }
 
-    return response.json({
+    const payload = {
       success: true,
       data: Array.from(phoneMap.values()),
-    })
+    }
+    apiCache.set(cacheKey, payload, 60)
+    return response.json(payload)
   }
 
   async show({ params, response }: HttpContext) {
