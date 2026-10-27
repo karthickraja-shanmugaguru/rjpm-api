@@ -77,14 +77,17 @@ router.group(() => {
     router.post('/admin/login', [AdminController, 'login']);
     router.group(() => {
         router.get('/admin/me', [AdminController, 'me']);
+        router.put('/admin/password', [AdminController, 'updateAdminPassword']);
         router.get('/admin/dashboard', [AdminController, 'dashboard']);
         router.get('/admin/users', [AdminController, 'getUsers']);
+        router.patch('/admin/users/:id/password', [AdminController, 'updateUserPassword']);
         router.patch('/admin/users/:id/status', [AdminController, 'updateUserStatus']);
         router.delete('/admin/users/:id', [AdminController, 'deleteUser']);
         router.get('/admin/partners', [AdminController, 'getPartners']);
         router.post('/admin/partners', [AdminController, 'createPartner']);
         router.get('/admin/partners/:id', [AdminController, 'getPartnerDetails']);
         router.put('/admin/partners/:id', [AdminController, 'updatePartner']);
+        router.patch('/admin/partners/:id/password', [AdminController, 'updatePartnerPassword']);
         router.delete('/admin/partners/:id', [AdminController, 'deletePartner']);
         router.post('/admin/partners/merge', [AdminController, 'mergePartners']);
         router.get('/admin/services', [AdminController, 'getServices']);
@@ -96,5 +99,34 @@ router.group(() => {
         router.put('/admin/labour/:id', [AdminController, 'updateLabour']);
         router.delete('/admin/labour/:id', [AdminController, 'deleteLabour']);
     }).use(auth()).use(role(['ADMIN']));
+    router.get('/health', async ({ response }) => {
+        return response.header('Cache-Control', 'no-cache').json({
+            status: 'ok',
+            uptime: Math.round(process.uptime()),
+            timestamp: new Date().toISOString(),
+        });
+    });
 }).prefix('/api');
+router.get('/health', async ({ response }) => {
+    return response.header('Cache-Control', 'no-cache').json({
+        status: 'ok',
+        uptime: Math.round(process.uptime()),
+        timestamp: new Date().toISOString(),
+    });
+});
+const KEEP_ALIVE_URL = process.env.RENDER_EXTERNAL_URL
+    ? `${process.env.RENDER_EXTERNAL_URL}/api/health`
+    : 'https://rjpm-api.onrender.com/api/health';
+if (process.env.NODE_ENV === 'production' || process.env.RENDER || process.env.KEEP_ALIVE === 'true') {
+    console.log(`[KeepAlive] Initialized for Render cold-start prevention: ${KEEP_ALIVE_URL}`);
+    setInterval(async () => {
+        try {
+            const res = await fetch(KEEP_ALIVE_URL);
+            console.log(`[KeepAlive] Ping status: ${res.status} at ${new Date().toLocaleTimeString()}`);
+        }
+        catch (err) {
+            console.warn(`[KeepAlive] Ping failed:`, err?.message || err);
+        }
+    }, 10 * 60 * 1000);
+}
 //# sourceMappingURL=routes.js.map

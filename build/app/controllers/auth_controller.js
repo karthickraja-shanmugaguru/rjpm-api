@@ -41,6 +41,7 @@ export default class AuthController {
                 business_name: fallbackData.businessName || 'My Event Business',
                 owner_name: fallbackData.ownerName || '',
                 primary_category: fallbackData.primaryCategory || 'Event Planning',
+                city: fallbackData.city || 'Rajapalayam',
                 rating: 0,
                 review_count: 0,
                 experience_years: 1,
@@ -58,6 +59,12 @@ export default class AuthController {
             }).returning('id');
             const createdId = typeof newId === 'object' ? newId.id : newId;
             const createdProvider = await db.from('providers').where('id', createdId).first();
+            await db.table('provider_service_areas').insert({
+                provider_id: createdId,
+                locality: 'All Rajapalayam Areas',
+                created_at: now,
+                updated_at: now,
+            });
             await db.from('services').whereNull('provider_id').where((qb) => {
                 qb.where('phone', 'like', `%${cleanPhone}%`).orWhere('whatsapp', 'like', `%${cleanPhone}%`);
             }).update({ provider_id: createdId, updated_at: now });

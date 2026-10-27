@@ -9,7 +9,7 @@ export default class ProviderController {
     const cacheKey = apiCache.makeKey('providers', { category, search, verified, city })
     const cached = apiCache.get(cacheKey)
     if (cached) {
-      return response.json(cached)
+      return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(cached)
     }
 
     // Curated shadow listings without a claimed account do NOT have public business profiles.
@@ -166,7 +166,7 @@ export default class ProviderController {
       data: Array.from(phoneMap.values()),
     }
     apiCache.set(cacheKey, payload, 60)
-    return response.json(payload)
+    return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload)
   }
 
   async show({ params, response }: HttpContext) {

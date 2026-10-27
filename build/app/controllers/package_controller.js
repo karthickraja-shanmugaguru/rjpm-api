@@ -1,7 +1,13 @@
 import db from '@adonisjs/lucid/services/db';
+import apiCache from '../utils/cache.js';
 export default class PackageController {
     async index({ request, response }) {
         const { eventType, search } = request.qs();
+        const cacheKey = apiCache.makeKey('packages', { eventType, search });
+        const cached = apiCache.get(cacheKey);
+        if (cached) {
+            return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(cached);
+        }
         let query = db
             .from('packages')
             .leftJoin('providers', 'packages.provider_id', 'providers.id')
@@ -70,10 +76,12 @@ export default class PackageController {
                 attribution_text: resolvedAttribution,
             };
         });
-        return response.json({
+        const payload = {
             success: true,
             data: result,
-        });
+        };
+        apiCache.set(cacheKey, payload, 60);
+        return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload);
     }
     async show({ params, response }) {
         const pkg = await db

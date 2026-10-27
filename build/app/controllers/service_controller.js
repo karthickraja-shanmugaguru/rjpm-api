@@ -1,7 +1,13 @@
 import db from '@adonisjs/lucid/services/db';
+import apiCache from '../utils/cache.js';
 export default class ServiceController {
     async index({ request, response }) {
         const { category, search, minRating, verified, city } = request.qs();
+        const cacheKey = apiCache.makeKey('services', { category, search, minRating, verified, city });
+        const cached = apiCache.get(cacheKey);
+        if (cached) {
+            return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(cached);
+        }
         let query = db
             .from('services')
             .leftJoin('providers', 'services.provider_id', 'providers.id')
@@ -10,9 +16,24 @@ export default class ServiceController {
         if (category && category !== 'All') {
             const qCat = String(category).trim().toLowerCase();
             const baseStem = qCat.split('/')[0].split('&')[0].trim();
+            const relatedTerms = [qCat, baseStem];
+            if (qCat.includes('sweet') || qCat.includes('dessert') || qCat.includes('snack') || qCat.includes('cake') || qCat.includes('bakery')) {
+                relatedTerms.push('cake', 'bakery', 'sweet', 'dessert', 'snack');
+            }
+            if (qCat.includes('tailor') || qCat.includes('saree') || qCat.includes('fashion') || qCat.includes('costume')) {
+                relatedTerms.push('tailor', 'fashion', 'boutique', 'saree', 'costume');
+            }
+            if (qCat.includes('makeup') || qCat.includes('hair') || qCat.includes('beauty')) {
+                relatedTerms.push('makeup', 'hair', 'beauty', 'salon');
+            }
+            if (qCat.includes('mehendi') || qCat.includes('mehndi') || qCat.includes('henna')) {
+                relatedTerms.push('mehendi', 'mehandi', 'mehndi', 'henna');
+            }
             query = query.where((sub) => {
-                sub.whereILike('services.category_name', `%${qCat}%`)
-                    .orWhereILike('services.category_name', `%${baseStem}%`);
+                for (const term of relatedTerms) {
+                    sub.orWhereILike('services.category_name', `%${term}%`)
+                        .orWhereILike('services.name', `%${term}%`);
+                }
             });
         }
         if (search && String(search).trim()) {
@@ -25,10 +46,27 @@ export default class ServiceController {
         }
         if (city && String(city).trim() && String(city).toLowerCase() !== 'all') {
             const cityClean = String(city).trim().toLowerCase();
+            const matchingProviderIds = await db
+                .from('provider_service_areas')
+                .where((sub) => {
+                sub.whereILike('locality', `%${cityClean}%`)
+                    .orWhereILike('locality', '%all%')
+                    .orWhereILike('locality', '%entire%');
+            })
+                .select('provider_id');
+            const pIds = matchingProviderIds.map((m) => m.provider_id);
             query = query.where((sub) => {
                 sub.whereILike('services.service_area_override', `%${cityClean}%`)
                     .orWhereILike('services.service_area_override', '%entire%')
-                    .orWhereNull('services.service_area_override');
+                    .orWhereNull('services.service_area_override')
+                    .orWhereILike('providers.city', `%${cityClean}%`);
+                if (pIds.length > 0) {
+                    sub.orWhereIn('services.provider_id', pIds);
+                }
+                if (cityClean === 'rajapalayam') {
+                    sub.orWhereNull('providers.city')
+                        .orWhere('providers.city', '');
+                }
             });
         }
         if (verified === 'true') {
@@ -54,10 +92,12 @@ export default class ServiceController {
             reviewCount: s.provider_reviews || 0,
             verified: Boolean(s.provider_verified),
         }));
-        return response.json({
+        const payload = {
             success: true,
             data: formatted,
-        });
+        };
+        apiCache.set(cacheKey, payload, 60);
+        return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload);
     }
     async show({ params, response }) {
         const service = await db

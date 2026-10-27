@@ -9,7 +9,7 @@ export default class PackageController {
     const cacheKey = apiCache.makeKey('packages', { eventType, search })
     const cached = apiCache.get(cacheKey)
     if (cached) {
-      return response.json(cached)
+      return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(cached)
     }
 
     let query = db
@@ -114,7 +114,7 @@ export default class PackageController {
       data: result,
     }
     apiCache.set(cacheKey, payload, 60)
-    return response.json(payload)
+    return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload)
   }
 
   async show({ params, response }: HttpContext) {

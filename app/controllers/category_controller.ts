@@ -6,7 +6,7 @@ export default class CategoryController {
   async index({ response }: HttpContext) {
     const cached = apiCache.get('categories:all')
     if (cached) {
-      return response.json(cached)
+      return response.header('Cache-Control', 'public, max-age=300, stale-while-revalidate=600').json(cached)
     }
 
     try {
@@ -16,7 +16,7 @@ export default class CategoryController {
         data: categories,
       }
       apiCache.set('categories:all', payload, 300) // 5 min cache
-      return response.json(payload)
+      return response.header('Cache-Control', 'public, max-age=300, stale-while-revalidate=600').json(payload)
     } catch (err) {
       console.error('CategoryController error:', err)
       return response.status(500).json({

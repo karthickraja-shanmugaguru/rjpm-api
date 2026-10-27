@@ -1,14 +1,53 @@
 import db from '@adonisjs/lucid/services/db';
+import apiCache from '../utils/cache.js';
 export default class ProviderController {
     async index({ request, response }) {
         const { category, search, verified, city } = request.qs();
+        const cacheKey = apiCache.makeKey('providers', { category, search, verified, city });
+        const cached = apiCache.get(cacheKey);
+        if (cached) {
+            return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(cached);
+        }
         let query = db
             .from('providers')
             .where('claimed', true)
             .where('provider_status', 'CLAIMED_ACTIVE')
             .select('*');
         if (category && category !== 'All') {
-            query = query.where('primary_category', category);
+            const qCat = String(category).trim().toLowerCase();
+            const baseStem = qCat.split('/')[0].split('&')[0].trim();
+            const relatedTerms = [qCat, baseStem];
+            if (qCat.includes('sweet') || qCat.includes('dessert') || qCat.includes('snack') || qCat.includes('cake') || qCat.includes('bakery')) {
+                relatedTerms.push('cake', 'bakery', 'sweet', 'dessert', 'snack');
+            }
+            if (qCat.includes('tailor') || qCat.includes('saree') || qCat.includes('fashion') || qCat.includes('costume')) {
+                relatedTerms.push('tailor', 'fashion', 'boutique', 'saree', 'costume');
+            }
+            if (qCat.includes('makeup') || qCat.includes('hair') || qCat.includes('beauty')) {
+                relatedTerms.push('makeup', 'hair', 'beauty', 'salon');
+            }
+            if (qCat.includes('mehendi') || qCat.includes('mehndi') || qCat.includes('henna')) {
+                relatedTerms.push('mehendi', 'mehandi', 'mehndi', 'henna');
+            }
+            const serviceProviderIds = await db
+                .from('services')
+                .where('status', 'LIVE')
+                .where((sub) => {
+                for (const term of relatedTerms) {
+                    sub.orWhereILike('category_name', `%${term}%`)
+                        .orWhereILike('name', `%${term}%`);
+                }
+            })
+                .select('provider_id');
+            const pIdsFromServices = serviceProviderIds.map((s) => s.provider_id);
+            query = query.where((sub) => {
+                for (const term of relatedTerms) {
+                    sub.orWhereILike('primary_category', `%${term}%`);
+                }
+                if (pIdsFromServices.length > 0) {
+                    sub.orWhereIn('id', pIdsFromServices);
+                }
+            });
         }
         if (search && String(search).trim()) {
             const q = `%${String(search).trim().toLowerCase()}%`;
@@ -23,12 +62,24 @@ export default class ProviderController {
             const cityClean = String(city).trim().toLowerCase();
             const matchingProviderIds = await db
                 .from('provider_service_areas')
-                .whereILike('locality', `%${cityClean}%`)
+                .where((sub) => {
+                sub.whereILike('locality', `%${cityClean}%`)
+                    .orWhereILike('locality', '%all%')
+                    .orWhereILike('locality', '%entire%');
+            })
                 .select('provider_id');
             const pIds = matchingProviderIds.map((m) => m.provider_id);
-            if (pIds.length > 0) {
-                query = query.whereIn('id', pIds);
-            }
+            query = query.where((sub) => {
+                if (pIds.length > 0) {
+                    sub.whereIn('id', pIds);
+                }
+                sub.orWhereILike('city', `%${cityClean}%`);
+                if (cityClean === 'rajapalayam') {
+                    sub.orWhereNull('city')
+                        .orWhere('city', '')
+                        .orWhereNotIn('id', db.from('provider_service_areas').select('provider_id'));
+                }
+            });
         }
         const providers = await query.orderBy('rating', 'desc');
         const providerIds = providers.map((p) => p.id);
@@ -87,10 +138,12 @@ export default class ProviderController {
                 }
             }
         }
-        return response.json({
+        const payload = {
             success: true,
             data: Array.from(phoneMap.values()),
-        });
+        };
+        apiCache.set(cacheKey, payload, 60);
+        return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload);
     }
     async show({ params, response }) {
         const provider = await db.from('providers').where('id', params.id).first();
