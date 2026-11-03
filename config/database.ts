@@ -43,6 +43,42 @@ const dbConfig = defineConfig({
         paths: ['database/seeders'],
       },
     },
+    postgres: {
+      client: 'pg',
+      connection: env.get('DATABASE_URL') || {
+        host: env.get('DB_HOST', '127.0.0.1'),
+        port: env.get('DB_PORT', 5432),
+        user: env.get('DB_USER', 'postgres'),
+        password: env.get('DB_PASSWORD', ''),
+        database: env.get('DB_DATABASE', 'evently'),
+        ssl: env.get('DB_SSL') || env.get('DATABASE_URL') ? { rejectUnauthorized: false } : undefined,
+      },
+      migrations: {
+        naturalSort: true,
+        paths: ['database/migrations'],
+      },
+      seeders: {
+        paths: ['database/seeders'],
+      },
+    },
+    pg: {
+      client: 'pg',
+      connection: env.get('DATABASE_URL') || {
+        host: env.get('DB_HOST', '127.0.0.1'),
+        port: env.get('DB_PORT', 5432),
+        user: env.get('DB_USER', 'postgres'),
+        password: env.get('DB_PASSWORD', ''),
+        database: env.get('DB_DATABASE', 'evently'),
+        ssl: env.get('DB_SSL') || env.get('DATABASE_URL') ? { rejectUnauthorized: false } : undefined,
+      },
+      migrations: {
+        naturalSort: true,
+        paths: ['database/migrations'],
+      },
+      seeders: {
+        paths: ['database/seeders'],
+      },
+    },
   },
 })
 

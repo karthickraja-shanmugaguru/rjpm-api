@@ -54,11 +54,13 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/luxon": "^3.7.5",
     "@types/node": "^22.15.18",
+    "@types/pg": "^8.23.1",
     "@vinejs/vine": "^3.0.1",
     "better-sqlite3": "^13.0.3",
     "jsonwebtoken": "^9.0.3",
     "luxon": "^3.7.2",
     "mysql2": "^3.24.4",
+    "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "ts-node-maintained": "^10.9.5",
     "typescript": "~5.8"

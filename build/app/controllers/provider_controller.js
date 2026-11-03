@@ -8,142 +8,153 @@ export default class ProviderController {
         if (cached) {
             return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(cached);
         }
-        let query = db
-            .from('providers')
-            .where('claimed', true)
-            .where('provider_status', 'CLAIMED_ACTIVE')
-            .select('*');
-        if (category && category !== 'All') {
-            const qCat = String(category).trim().toLowerCase();
-            const baseStem = qCat.split('/')[0].split('&')[0].trim();
-            const relatedTerms = [qCat, baseStem];
-            if (qCat.includes('sweet') || qCat.includes('dessert') || qCat.includes('snack') || qCat.includes('cake') || qCat.includes('bakery')) {
-                relatedTerms.push('cake', 'bakery', 'sweet', 'dessert', 'snack');
-            }
-            if (qCat.includes('tailor') || qCat.includes('saree') || qCat.includes('fashion') || qCat.includes('costume')) {
-                relatedTerms.push('tailor', 'fashion', 'boutique', 'saree', 'costume');
-            }
-            if (qCat.includes('makeup') || qCat.includes('hair') || qCat.includes('beauty')) {
-                relatedTerms.push('makeup', 'hair', 'beauty', 'salon');
-            }
-            if (qCat.includes('mehendi') || qCat.includes('mehndi') || qCat.includes('henna')) {
-                relatedTerms.push('mehendi', 'mehandi', 'mehndi', 'henna');
-            }
-            const serviceProviderIds = await db
-                .from('services')
-                .where('status', 'LIVE')
-                .where((sub) => {
-                for (const term of relatedTerms) {
-                    sub.orWhereILike('category_name', `%${term}%`)
-                        .orWhereILike('name', `%${term}%`);
+        try {
+            let query = db
+                .from('providers')
+                .where('claimed', true)
+                .where('provider_status', 'CLAIMED_ACTIVE')
+                .select('*');
+            if (category && category !== 'All') {
+                const qCat = String(category).trim().toLowerCase();
+                const baseStem = qCat.split('/')[0].split('&')[0].trim();
+                const relatedTerms = [qCat, baseStem];
+                if (qCat.includes('sweet') || qCat.includes('dessert') || qCat.includes('snack') || qCat.includes('cake') || qCat.includes('bakery')) {
+                    relatedTerms.push('cake', 'bakery', 'sweet', 'dessert', 'snack');
                 }
-            })
-                .select('provider_id');
-            const pIdsFromServices = serviceProviderIds.map((s) => s.provider_id);
-            query = query.where((sub) => {
-                for (const term of relatedTerms) {
-                    sub.orWhereILike('primary_category', `%${term}%`);
+                if (qCat.includes('tailor') || qCat.includes('saree') || qCat.includes('fashion') || qCat.includes('costume')) {
+                    relatedTerms.push('tailor', 'fashion', 'boutique', 'saree', 'costume');
                 }
-                if (pIdsFromServices.length > 0) {
-                    sub.orWhereIn('id', pIdsFromServices);
+                if (qCat.includes('makeup') || qCat.includes('hair') || qCat.includes('beauty')) {
+                    relatedTerms.push('makeup', 'hair', 'beauty', 'salon');
                 }
+                if (qCat.includes('mehendi') || qCat.includes('mehndi') || qCat.includes('henna')) {
+                    relatedTerms.push('mehendi', 'mehandi', 'mehndi', 'henna');
+                }
+                const serviceProviderIds = await db
+                    .from('services')
+                    .where('status', 'LIVE')
+                    .where((sub) => {
+                    for (const term of relatedTerms) {
+                        sub.orWhereILike('category_name', `%${term}%`)
+                            .orWhereILike('name', `%${term}%`);
+                    }
+                })
+                    .select('provider_id');
+                const pIdsFromServices = serviceProviderIds.map((s) => s.provider_id);
+                query = query.where((sub) => {
+                    for (const term of relatedTerms) {
+                        sub.orWhereILike('primary_category', `%${term}%`);
+                    }
+                    if (pIdsFromServices.length > 0) {
+                        sub.orWhereIn('id', pIdsFromServices);
+                    }
+                });
+            }
+            if (search && String(search).trim()) {
+                const q = `%${String(search).trim().toLowerCase()}%`;
+                query = query.where((sub) => {
+                    sub.whereILike('business_name', q).orWhereILike('primary_category', q);
+                });
+            }
+            if (verified === 'true') {
+                query = query.where('verified', true);
+            }
+            if (city && String(city).trim() && String(city).toLowerCase() !== 'all') {
+                const cityClean = String(city).trim().toLowerCase();
+                const matchingProviderIds = await db
+                    .from('provider_service_areas')
+                    .where((sub) => {
+                    sub.whereILike('locality', `%${cityClean}%`)
+                        .orWhereILike('locality', '%all%')
+                        .orWhereILike('locality', '%entire%');
+                })
+                    .select('provider_id');
+                const pIds = matchingProviderIds.map((m) => m.provider_id);
+                query = query.where((sub) => {
+                    if (pIds.length > 0) {
+                        sub.whereIn('id', pIds);
+                    }
+                    sub.orWhereILike('city', `%${cityClean}%`);
+                    if (cityClean === 'rajapalayam') {
+                        sub.orWhereNull('city')
+                            .orWhere('city', '')
+                            .orWhereNotIn('id', db.from('provider_service_areas').select('provider_id'));
+                    }
+                });
+            }
+            const providers = await query.orderBy('rating', 'desc');
+            const providerIds = providers.map((p) => p.id);
+            const services = providerIds.length > 0
+                ? await db.from('services').whereIn('provider_id', providerIds).where('status', 'LIVE')
+                : [];
+            const areas = providerIds.length > 0
+                ? await db.from('provider_service_areas').whereIn('provider_id', providerIds)
+                : [];
+            const result = providers.map((p) => {
+                const pServices = services.filter((s) => s.provider_id === p.id);
+                const startingPrice = pServices.length > 0 ? pServices[0].price_display : 'On request';
+                const pAreas = areas.filter((a) => a.provider_id === p.id);
+                const areaNames = pAreas.map((a) => a.locality).filter(Boolean);
+                const locationDisplay = areaNames.length > 0
+                    ? areaNames.map((l) => l.charAt(0).toUpperCase() + l.slice(1)).join(' · ')
+                    : 'Rajapalayam';
+                const cleanCompleted = p.completed_events
+                    ? String(p.completed_events).replace(/\.0+$/, '')
+                    : '50+';
+                return {
+                    id: p.id,
+                    businessName: p.business_name,
+                    category: p.primary_category,
+                    rating: p.rating,
+                    reviewCount: p.review_count,
+                    location: locationDisplay,
+                    experience: `${p.experience_years} yrs`,
+                    completedEvents: cleanCompleted,
+                    verified: Boolean(p.verified),
+                    claimed: Boolean(p.claimed),
+                    providerStatus: p.provider_status || (p.claimed ? 'CLAIMED_ACTIVE' : 'SHADOW'),
+                    source: p.source || 'DIRECT_SIGNUP',
+                    attributionText: p.attribution_text || (p.claimed ? 'Verified Business Partner' : 'Public Listing • Powered by Google Search / Web Source'),
+                    price: startingPrice,
+                    serviceCount: pServices.length,
+                    coverImage: p.cover_image,
+                    logoImage: p.logo_image,
+                    phone: p.phone,
+                };
             });
-        }
-        if (search && String(search).trim()) {
-            const q = `%${String(search).trim().toLowerCase()}%`;
-            query = query.where((sub) => {
-                sub.whereILike('business_name', q).orWhereILike('primary_category', q);
-            });
-        }
-        if (verified === 'true') {
-            query = query.where('verified', true);
-        }
-        if (city && String(city).trim() && String(city).toLowerCase() !== 'all') {
-            const cityClean = String(city).trim().toLowerCase();
-            const matchingProviderIds = await db
-                .from('provider_service_areas')
-                .where((sub) => {
-                sub.whereILike('locality', `%${cityClean}%`)
-                    .orWhereILike('locality', '%all%')
-                    .orWhereILike('locality', '%entire%');
-            })
-                .select('provider_id');
-            const pIds = matchingProviderIds.map((m) => m.provider_id);
-            query = query.where((sub) => {
-                if (pIds.length > 0) {
-                    sub.whereIn('id', pIds);
+            const phoneMap = new Map();
+            for (const p of result) {
+                const cleanDigits = String(p.phone || '').replace(/\D/g, '').slice(-10);
+                if (!cleanDigits) {
+                    phoneMap.set(`id_${p.id}`, p);
+                    continue;
                 }
-                sub.orWhereILike('city', `%${cityClean}%`);
-                if (cityClean === 'rajapalayam') {
-                    sub.orWhereNull('city')
-                        .orWhere('city', '')
-                        .orWhereNotIn('id', db.from('provider_service_areas').select('provider_id'));
-                }
-            });
-        }
-        const providers = await query.orderBy('rating', 'desc');
-        const providerIds = providers.map((p) => p.id);
-        const services = providerIds.length > 0
-            ? await db.from('services').whereIn('provider_id', providerIds).where('status', 'LIVE')
-            : [];
-        const areas = providerIds.length > 0
-            ? await db.from('provider_service_areas').whereIn('provider_id', providerIds)
-            : [];
-        const result = providers.map((p) => {
-            const pServices = services.filter((s) => s.provider_id === p.id);
-            const startingPrice = pServices.length > 0 ? pServices[0].price_display : 'On request';
-            const pAreas = areas.filter((a) => a.provider_id === p.id);
-            const areaNames = pAreas.map((a) => a.locality).filter(Boolean);
-            const locationDisplay = areaNames.length > 0
-                ? areaNames.map((l) => l.charAt(0).toUpperCase() + l.slice(1)).join(' · ')
-                : 'Rajapalayam';
-            const cleanCompleted = p.completed_events
-                ? String(p.completed_events).replace(/\.0+$/, '')
-                : '50+';
-            return {
-                id: p.id,
-                businessName: p.business_name,
-                category: p.primary_category,
-                rating: p.rating,
-                reviewCount: p.review_count,
-                location: locationDisplay,
-                experience: `${p.experience_years} yrs`,
-                completedEvents: cleanCompleted,
-                verified: Boolean(p.verified),
-                claimed: Boolean(p.claimed),
-                providerStatus: p.provider_status || (p.claimed ? 'CLAIMED_ACTIVE' : 'SHADOW'),
-                source: p.source || 'DIRECT_SIGNUP',
-                attributionText: p.attribution_text || (p.claimed ? 'Verified Business Partner' : 'Public Listing • Powered by Google Search / Web Source'),
-                price: startingPrice,
-                serviceCount: pServices.length,
-                coverImage: p.cover_image,
-                logoImage: p.logo_image,
-                phone: p.phone,
-            };
-        });
-        const phoneMap = new Map();
-        for (const p of result) {
-            const cleanDigits = String(p.phone || '').replace(/\D/g, '').slice(-10);
-            if (!cleanDigits) {
-                phoneMap.set(`id_${p.id}`, p);
-                continue;
-            }
-            if (!phoneMap.has(cleanDigits)) {
-                phoneMap.set(cleanDigits, p);
-            }
-            else {
-                const existing = phoneMap.get(cleanDigits);
-                if (p.claimed && !existing.claimed) {
+                if (!phoneMap.has(cleanDigits)) {
                     phoneMap.set(cleanDigits, p);
                 }
+                else {
+                    const existing = phoneMap.get(cleanDigits);
+                    if (p.claimed && !existing.claimed) {
+                        phoneMap.set(cleanDigits, p);
+                    }
+                }
             }
+            const payload = {
+                success: true,
+                data: Array.from(phoneMap.values()),
+            };
+            apiCache.set(cacheKey, payload, 60);
+            return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload);
         }
-        const payload = {
-            success: true,
-            data: Array.from(phoneMap.values()),
-        };
-        apiCache.set(cacheKey, payload, 60);
-        return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload);
+        catch (err) {
+            console.error('ProviderController error:', err);
+            return response.status(500).json({
+                success: false,
+                message: 'Unable to retrieve providers from database',
+                error: String(err?.message || err),
+                data: [],
+            });
+        }
     }
     async show({ params, response }) {
         const provider = await db.from('providers').where('id', params.id).first();

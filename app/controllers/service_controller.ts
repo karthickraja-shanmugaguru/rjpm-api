@@ -12,129 +12,139 @@ export default class ServiceController {
       return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(cached)
     }
 
-    let query = db
-      .from('services')
-      .leftJoin('providers', 'services.provider_id', 'providers.id')
-      .where('services.status', 'LIVE')
-      .select(
-        'services.id',
-        'services.provider_id',
-        'services.category_name',
-        'services.name',
-        'services.description',
-        'services.pricing_type',
-        'services.price_display',
-        'services.price_amount',
-        'services.icon',
-        'services.cover_image',
-        'services.service_area_override',
-        'services.phone as service_phone',
-        'services.whatsapp as service_whatsapp',
-        'services.attribution_text as service_attribution_text',
-        'providers.business_name as provider_name',
-        'providers.rating as provider_rating',
-        'providers.review_count as provider_reviews',
-        'providers.verified as provider_verified',
-        'providers.provider_status as provider_status',
-        'providers.claimed as provider_claimed',
-        'providers.source as provider_source',
-        'providers.attribution_text as provider_attribution_text'
-      )
+    try {
+      let query = db
+        .from('services')
+        .leftJoin('providers', 'services.provider_id', 'providers.id')
+        .where('services.status', 'LIVE')
+        .select(
+          'services.id',
+          'services.provider_id',
+          'services.category_name',
+          'services.name',
+          'services.description',
+          'services.pricing_type',
+          'services.price_display',
+          'services.price_amount',
+          'services.icon',
+          'services.cover_image',
+          'services.service_area_override',
+          'services.phone as service_phone',
+          'services.whatsapp as service_whatsapp',
+          'services.attribution_text as service_attribution_text',
+          'providers.business_name as provider_name',
+          'providers.rating as provider_rating',
+          'providers.review_count as provider_reviews',
+          'providers.verified as provider_verified',
+          'providers.provider_status as provider_status',
+          'providers.claimed as provider_claimed',
+          'providers.source as provider_source',
+          'providers.attribution_text as provider_attribution_text'
+        )
 
-    if (category && category !== 'All') {
-      const qCat = String(category).trim().toLowerCase()
-      const baseStem = qCat.split('/')[0].split('&')[0].trim()
+      if (category && category !== 'All') {
+        const qCat = String(category).trim().toLowerCase()
+        const baseStem = qCat.split('/')[0].split('&')[0].trim()
 
-      const relatedTerms = [qCat, baseStem]
-      if (qCat.includes('sweet') || qCat.includes('dessert') || qCat.includes('snack') || qCat.includes('cake') || qCat.includes('bakery')) {
-        relatedTerms.push('cake', 'bakery', 'sweet', 'dessert', 'snack')
-      }
-      if (qCat.includes('tailor') || qCat.includes('saree') || qCat.includes('fashion') || qCat.includes('costume')) {
-        relatedTerms.push('tailor', 'fashion', 'boutique', 'saree', 'costume')
-      }
-      if (qCat.includes('makeup') || qCat.includes('hair') || qCat.includes('beauty')) {
-        relatedTerms.push('makeup', 'hair', 'beauty', 'salon')
-      }
-      if (qCat.includes('mehendi') || qCat.includes('mehndi') || qCat.includes('henna')) {
-        relatedTerms.push('mehendi', 'mehandi', 'mehndi', 'henna')
-      }
-
-      query = query.where((sub) => {
-        for (const term of relatedTerms) {
-          sub.orWhereILike('services.category_name', `%${term}%`)
-             .orWhereILike('services.name', `%${term}%`)
+        const relatedTerms = [qCat, baseStem]
+        if (qCat.includes('sweet') || qCat.includes('dessert') || qCat.includes('snack') || qCat.includes('cake') || qCat.includes('bakery')) {
+          relatedTerms.push('cake', 'bakery', 'sweet', 'dessert', 'snack')
         }
-      })
-    }
+        if (qCat.includes('tailor') || qCat.includes('saree') || qCat.includes('fashion') || qCat.includes('costume')) {
+          relatedTerms.push('tailor', 'fashion', 'boutique', 'saree', 'costume')
+        }
+        if (qCat.includes('makeup') || qCat.includes('hair') || qCat.includes('beauty')) {
+          relatedTerms.push('makeup', 'hair', 'beauty', 'salon')
+        }
+        if (qCat.includes('mehendi') || qCat.includes('mehndi') || qCat.includes('henna')) {
+          relatedTerms.push('mehendi', 'mehandi', 'mehndi', 'henna')
+        }
 
-    if (search && String(search).trim()) {
-      const q = `%${String(search).trim().toLowerCase()}%`
-      query = query.where((sub) => {
-        sub.whereILike('services.name', q)
-          .orWhereILike('services.category_name', q)
-          .orWhereILike('providers.business_name', q)
-      })
-    }
-
-    if (city && String(city).trim() && String(city).toLowerCase() !== 'all') {
-      const cityClean = String(city).trim().toLowerCase()
-      const matchingProviderIds = await db
-        .from('provider_service_areas')
-        .where((sub) => {
-          sub.whereILike('locality', `%${cityClean}%`)
-            .orWhereILike('locality', '%all%')
-            .orWhereILike('locality', '%entire%')
+        query = query.where((sub) => {
+          for (const term of relatedTerms) {
+            sub.orWhereILike('services.category_name', `%${term}%`)
+               .orWhereILike('services.name', `%${term}%`)
+          }
         })
-        .select('provider_id')
-      const pIds = matchingProviderIds.map((m) => m.provider_id)
+      }
 
-      query = query.where((sub) => {
-        sub.whereILike('services.service_area_override', `%${cityClean}%`)
-          .orWhereILike('services.service_area_override', '%entire%')
-          .orWhereNull('services.service_area_override')
-          .orWhereILike('providers.city', `%${cityClean}%`)
-        if (pIds.length > 0) {
-          sub.orWhereIn('services.provider_id', pIds)
-        }
-        if (cityClean === 'rajapalayam') {
-          sub.orWhereNull('providers.city')
-            .orWhere('providers.city', '')
-        }
+      if (search && String(search).trim()) {
+        const q = `%${String(search).trim().toLowerCase()}%`
+        query = query.where((sub) => {
+          sub.whereILike('services.name', q)
+            .orWhereILike('services.category_name', q)
+            .orWhereILike('providers.business_name', q)
+        })
+      }
+
+      if (city && String(city).trim() && String(city).toLowerCase() !== 'all') {
+        const cityClean = String(city).trim().toLowerCase()
+        const matchingProviderIds = await db
+          .from('provider_service_areas')
+          .where((sub) => {
+            sub.whereILike('locality', `%${cityClean}%`)
+              .orWhereILike('locality', '%all%')
+              .orWhereILike('locality', '%entire%')
+          })
+          .select('provider_id')
+        const pIds = matchingProviderIds.map((m) => m.provider_id)
+
+        query = query.where((sub) => {
+          sub.whereILike('services.service_area_override', `%${cityClean}%`)
+            .orWhereILike('services.service_area_override', '%entire%')
+            .orWhereNull('services.service_area_override')
+            .orWhereILike('providers.city', `%${cityClean}%`)
+          if (pIds.length > 0) {
+            sub.orWhereIn('services.provider_id', pIds)
+          }
+          if (cityClean === 'rajapalayam') {
+            sub.orWhereNull('providers.city')
+              .orWhere('providers.city', '')
+          }
+        })
+      }
+
+      if (verified === 'true') {
+        query = query.where((sub) => {
+          sub.where('providers.verified', true)
+            .orWhere('services.attribution_text', 'like', '%Google Search%')
+        })
+      }
+
+      if (minRating) {
+        query = query.where('providers.rating', '>=', Number(minRating))
+      }
+
+      const rawServices = await query.orderBy('services.id', 'desc')
+      const formatted = rawServices.map((s) => ({
+        ...s,
+        title: s.name,
+        price: s.price_amount,
+        priceDisplay: s.price_display,
+        coverImage: s.cover_image,
+        category: s.category_name,
+        location: s.service_area_override || 'Rajapalayam',
+        providerName: s.provider_name || '',
+        rating: s.provider_rating || 4.8,
+        reviewCount: s.provider_reviews || 0,
+        verified: Boolean(s.provider_verified),
+      }))
+
+      const payload = {
+        success: true,
+        data: formatted,
+      }
+      apiCache.set(cacheKey, payload, 60)
+      return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload)
+    } catch (err) {
+      console.error('ServiceController error:', err)
+      return response.status(500).json({
+        success: false,
+        message: 'Unable to retrieve services from database',
+        error: String(err?.message || err),
+        data: [],
       })
     }
-
-    if (verified === 'true') {
-      query = query.where((sub) => {
-        sub.where('providers.verified', true)
-          .orWhere('services.attribution_text', 'like', '%Google Search%')
-      })
-    }
-
-    if (minRating) {
-      query = query.where('providers.rating', '>=', Number(minRating))
-    }
-
-    const rawServices = await query.orderBy('services.id', 'desc')
-    const formatted = rawServices.map((s) => ({
-      ...s,
-      title: s.name,
-      price: s.price_amount,
-      priceDisplay: s.price_display,
-      coverImage: s.cover_image,
-      category: s.category_name,
-      location: s.service_area_override || 'Rajapalayam',
-      providerName: s.provider_name || '',
-      rating: s.provider_rating || 4.8,
-      reviewCount: s.provider_reviews || 0,
-      verified: Boolean(s.provider_verified),
-    }))
-
-    const payload = {
-      success: true,
-      data: formatted,
-    }
-    apiCache.set(cacheKey, payload, 60)
-    return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload)
   }
 
   async show({ params, response }: HttpContext) {
