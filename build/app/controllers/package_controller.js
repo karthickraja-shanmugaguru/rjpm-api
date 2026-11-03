@@ -6,13 +6,13 @@ export default class PackageController {
         const cacheKey = apiCache.makeKey('packages', { eventType, search });
         const cached = apiCache.get(cacheKey);
         if (cached) {
-            return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(cached);
+            return response.header('Cache-Control', 'no-cache, no-store, must-revalidate').json(cached);
         }
         let query = db
             .from('packages')
             .leftJoin('providers', 'packages.provider_id', 'providers.id')
             .where('packages.status', 'LIVE')
-            .select('packages.*', 'packages.phone as package_phone', 'packages.whatsapp as package_whatsapp', 'packages.attribution_text as package_attribution_text', 'providers.business_name as provider_name', 'providers.rating as provider_rating', 'providers.review_count as provider_reviews', 'providers.verified as provider_verified', 'providers.provider_status as provider_status', 'providers.claimed as provider_claimed', 'providers.source as provider_source', 'providers.attribution_text as provider_attribution_text');
+            .select('packages.*', 'providers.phone as package_phone', 'providers.whatsapp as package_whatsapp', 'providers.attribution_text as package_attribution_text', 'providers.business_name as provider_name', 'providers.rating as provider_rating', 'providers.review_count as provider_reviews', 'providers.verified as provider_verified', 'providers.provider_status as provider_status', 'providers.claimed as provider_claimed', 'providers.source as provider_source', 'providers.attribution_text as provider_attribution_text');
         if (eventType && eventType !== 'All Packages') {
             query = query.where('packages.event_type', eventType);
         }
@@ -81,7 +81,7 @@ export default class PackageController {
             data: result,
         };
         apiCache.set(cacheKey, payload, 60);
-        return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload);
+        return response.header('Cache-Control', 'no-cache, no-store, must-revalidate').json(payload);
     }
     async show({ params, response }) {
         const pkg = await db

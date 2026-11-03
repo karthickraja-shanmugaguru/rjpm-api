@@ -6,14 +6,14 @@ export default class ServiceController {
         const cacheKey = apiCache.makeKey('services', { category, search, minRating, verified, city });
         const cached = apiCache.get(cacheKey);
         if (cached) {
-            return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(cached);
+            return response.header('Cache-Control', 'no-cache, no-store, must-revalidate').json(cached);
         }
         try {
             let query = db
                 .from('services')
                 .leftJoin('providers', 'services.provider_id', 'providers.id')
                 .where('services.status', 'LIVE')
-                .select('services.id', 'services.provider_id', 'services.category_name', 'services.name', 'services.description', 'services.pricing_type', 'services.price_display', 'services.price_amount', 'services.icon', 'services.cover_image', 'services.service_area_override', 'services.phone as service_phone', 'services.whatsapp as service_whatsapp', 'services.attribution_text as service_attribution_text', 'providers.business_name as provider_name', 'providers.rating as provider_rating', 'providers.review_count as provider_reviews', 'providers.verified as provider_verified', 'providers.provider_status as provider_status', 'providers.claimed as provider_claimed', 'providers.source as provider_source', 'providers.attribution_text as provider_attribution_text');
+                .select('services.id', 'services.provider_id', 'services.category_name', 'services.name', 'services.description', 'services.pricing_type', 'services.price_display', 'services.price_amount', 'services.icon', 'services.cover_image', 'services.service_area_override', 'providers.phone as service_phone', 'providers.whatsapp as service_whatsapp', 'providers.attribution_text as service_attribution_text', 'providers.business_name as provider_name', 'providers.rating as provider_rating', 'providers.review_count as provider_reviews', 'providers.verified as provider_verified', 'providers.provider_status as provider_status', 'providers.claimed as provider_claimed', 'providers.source as provider_source', 'providers.attribution_text as provider_attribution_text');
             if (category && category !== 'All') {
                 const qCat = String(category).trim().toLowerCase();
                 const baseStem = qCat.split('/')[0].split('&')[0].trim();
@@ -98,7 +98,7 @@ export default class ServiceController {
                 data: formatted,
             };
             apiCache.set(cacheKey, payload, 60);
-            return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload);
+            return response.header('Cache-Control', 'no-cache, no-store, must-revalidate').json(payload);
         }
         catch (err) {
             console.error('ServiceController error:', err);

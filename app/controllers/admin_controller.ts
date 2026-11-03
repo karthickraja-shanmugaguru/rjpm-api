@@ -3,6 +3,7 @@ import db from '@adonisjs/lucid/services/db'
 import jwt from 'jsonwebtoken'
 import env from '#start/env'
 import crypto from 'node:crypto'
+import apiCache from '../utils/cache.js'
 
 function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex')
@@ -768,132 +769,142 @@ export default class AdminController {
    * List all catalog entities (Services, Packages, Labour)
    */
   async getServices({ request, response }: HttpContext) {
-    const { entityType, category, search, status } = request.qs()
+    try {
+      const { entityType, category, search, status } = request.qs()
 
-    let items: any[] = []
+      let items: any[] = []
 
-    // 1. Services
-    if (!entityType || entityType === 'ALL' || entityType === 'SERVICE') {
-      let q = db
-        .from('services')
-        .leftJoin('providers', 'services.provider_id', 'providers.id')
-        .select(
-          'services.*',
-          'providers.business_name as provider_name',
-          db.raw('COALESCE(services.phone, providers.phone) as provider_phone'),
-          'providers.provider_status',
-          'providers.claimed as provider_claimed',
-          db.raw('COALESCE(services.attribution_text, providers.attribution_text) as attribution_text')
+      // 1. Services
+      if (!entityType || entityType === 'ALL' || entityType === 'SERVICE') {
+        let q = db
+          .from('services')
+          .leftJoin('providers', 'services.provider_id', 'providers.id')
+          .select(
+            'services.*',
+            'providers.business_name as provider_name',
+            db.raw('COALESCE(services.phone, providers.phone) as provider_phone'),
+            'providers.provider_status',
+            'providers.claimed as provider_claimed',
+            db.raw('COALESCE(services.attribution_text, providers.attribution_text) as attribution_text')
+          )
+
+        if (category && category !== 'ALL') q = q.where('services.category_name', category)
+        if (status && status !== 'ALL') q = q.where('services.status', status)
+        if (search && String(search).trim()) {
+          const term = `%${String(search).trim().toLowerCase()}%`
+          q = q.where((sub: any) => {
+            sub.whereILike('services.name', term)
+              .orWhereILike('services.phone', term)
+              .orWhereILike('providers.business_name', term)
+              .orWhereILike('providers.phone', term)
+          })
+        }
+
+        const svcList = await q.orderBy('services.id', 'desc')
+        const svcIds = svcList.map((s: any) => s.id)
+        const allSvcImages = svcIds.length > 0
+          ? await db.from('service_images').whereIn('service_id', svcIds).orderBy('sort_order', 'asc')
+          : []
+
+        items.push(
+          ...svcList.map((s: any) => ({
+            ...s,
+            images: allSvcImages.filter((img: any) => img.service_id === s.id).map((img: any) => img.image_url),
+            entityType: 'SERVICE',
+          }))
         )
-
-      if (category && category !== 'ALL') q = q.where('services.category_name', category)
-      if (status && status !== 'ALL') q = q.where('services.status', status)
-      if (search && String(search).trim()) {
-        const term = `%${String(search).trim().toLowerCase()}%`
-        q = q.where((sub: any) => {
-          sub.whereILike('services.name', term)
-            .orWhereILike('services.phone', term)
-            .orWhereILike('providers.business_name', term)
-            .orWhereILike('providers.phone', term)
-        })
       }
 
-      const svcList = await q.orderBy('services.id', 'desc')
-      const svcIds = svcList.map((s: any) => s.id)
-      const allSvcImages = svcIds.length > 0
-        ? await db.from('service_images').whereIn('service_id', svcIds).orderBy('sort_order', 'asc')
-        : []
+      // 2. Packages
+      if (!entityType || entityType === 'ALL' || entityType === 'PACKAGE') {
+        let q = db
+          .from('packages')
+          .leftJoin('providers', 'packages.provider_id', 'providers.id')
+          .select(
+            'packages.*',
+            'providers.business_name as provider_name',
+            db.raw('COALESCE(packages.phone, providers.phone) as provider_phone'),
+            'providers.provider_status',
+            'providers.claimed as provider_claimed',
+            db.raw('COALESCE(packages.attribution_text, providers.attribution_text) as attribution_text')
+          )
 
-      items.push(
-        ...svcList.map((s: any) => ({
-          ...s,
-          images: allSvcImages.filter((img: any) => img.service_id === s.id).map((img: any) => img.image_url),
-          entityType: 'SERVICE',
-        }))
-      )
-    }
+        if (status && status !== 'ALL') q = q.where('packages.status', status)
+        if (search && String(search).trim()) {
+          const term = `%${String(search).trim().toLowerCase()}%`
+          q = q.where((sub: any) => {
+            sub.whereILike('packages.name', term)
+              .orWhereILike('packages.phone', term)
+              .orWhereILike('providers.business_name', term)
+              .orWhereILike('providers.phone', term)
+          })
+        }
 
-    // 2. Packages
-    if (!entityType || entityType === 'ALL' || entityType === 'PACKAGE') {
-      let q = db
-        .from('packages')
-        .leftJoin('providers', 'packages.provider_id', 'providers.id')
-        .select(
-          'packages.*',
-          'providers.business_name as provider_name',
-          db.raw('COALESCE(packages.phone, providers.phone) as provider_phone'),
-          'providers.provider_status',
-          'providers.claimed as provider_claimed',
-          db.raw('COALESCE(packages.attribution_text, providers.attribution_text) as attribution_text')
+        const pkgList = await q.orderBy('packages.id', 'desc')
+        const pkgIds = pkgList.map((p: any) => p.id)
+        const allPkgImages = pkgIds.length > 0
+          ? await db.from('package_images').whereIn('package_id', pkgIds).orderBy('sort_order', 'asc')
+          : []
+
+        items.push(
+          ...pkgList.map((p: any) => ({
+            ...p,
+            images: allPkgImages.filter((img: any) => img.package_id === p.id).map((img: any) => img.image_url),
+            category_name: p.event_type || 'Package Bundle',
+            entityType: 'PACKAGE',
+          }))
         )
-
-      if (status && status !== 'ALL') q = q.where('packages.status', status)
-      if (search && String(search).trim()) {
-        const term = `%${String(search).trim().toLowerCase()}%`
-        q = q.where((sub: any) => {
-          sub.whereILike('packages.name', term)
-            .orWhereILike('packages.phone', term)
-            .orWhereILike('providers.business_name', term)
-            .orWhereILike('providers.phone', term)
-        })
       }
 
-      const pkgList = await q.orderBy('packages.id', 'desc')
-      const pkgIds = pkgList.map((p: any) => p.id)
-      const allPkgImages = pkgIds.length > 0
-        ? await db.from('package_images').whereIn('package_id', pkgIds).orderBy('sort_order', 'asc')
-        : []
+      // 3. Labour
+      if (!entityType || entityType === 'ALL' || entityType === 'LABOUR') {
+        let q = db
+          .from('labour_listings')
+          .leftJoin('providers', 'labour_listings.provider_id', 'providers.id')
+          .select(
+            'labour_listings.*',
+            db.raw('COALESCE(labour_listings.phone, providers.phone) as provider_phone'),
+            'providers.provider_status',
+            'providers.claimed as provider_claimed',
+            db.raw('COALESCE(labour_listings.attribution_text, providers.attribution_text) as attribution_text')
+          )
 
-      items.push(
-        ...pkgList.map((p: any) => ({
-          ...p,
-          images: allPkgImages.filter((img: any) => img.package_id === p.id).map((img: any) => img.image_url),
-          category_name: p.event_type || 'Package Bundle',
-          entityType: 'PACKAGE',
-        }))
-      )
-    }
+        if (category && category !== 'ALL') q = q.where('labour_listings.type', category)
+        if (search && String(search).trim()) {
+          const term = `%${String(search).trim().toLowerCase()}%`
+          q = q.where((sub: any) => {
+            sub.whereILike('labour_listings.name', term)
+              .orWhereILike('labour_listings.provider_name', term)
+              .orWhereILike('labour_listings.phone', term)
+              .orWhereILike('providers.phone', term)
+          })
+        }
 
-    // 3. Labour
-    if (!entityType || entityType === 'ALL' || entityType === 'LABOUR') {
-      let q = db
-        .from('labour_listings')
-        .leftJoin('providers', 'labour_listings.provider_id', 'providers.id')
-        .select(
-          'labour_listings.*',
-          db.raw('COALESCE(labour_listings.phone, providers.phone) as provider_phone'),
-          'providers.provider_status',
-          'providers.claimed as provider_claimed',
-          db.raw('COALESCE(labour_listings.attribution_text, providers.attribution_text) as attribution_text')
-        )
-
-      if (category && category !== 'ALL') q = q.where('labour_listings.type', category)
-      if (search && String(search).trim()) {
-        const term = `%${String(search).trim().toLowerCase()}%`
-        q = q.where((sub: any) => {
-          sub.whereILike('labour_listings.name', term)
-            .orWhereILike('labour_listings.provider_name', term)
-            .orWhereILike('labour_listings.phone', term)
-            .orWhereILike('providers.phone', term)
-        })
+        const labourList = await q.orderBy('labour_listings.id', 'desc')
+        items.push(...labourList.map((l: any) => ({
+          ...l,
+          category_name: l.type || 'Daily Wage Work',
+          status: 'LIVE',
+          entityType: 'LABOUR',
+        })))
       }
 
-      const labourList = await q.orderBy('labour_listings.id', 'desc')
-      items.push(...labourList.map((l: any) => ({
-        ...l,
-        category_name: l.type || 'Daily Wage Work',
-        status: 'LIVE',
-        entityType: 'LABOUR',
-      })))
+      // Sort items by ID desc
+      items.sort((a, b) => Number(b.id) - Number(a.id))
+
+      return response.json({
+        success: true,
+        data: items,
+      })
+    } catch (err: any) {
+      console.error('Admin getServices error:', err)
+      return response.status(500).json({
+        success: false,
+        message: 'Failed to load catalog items',
+        error: String(err?.message || err),
+        data: [],
+      })
     }
-
-    // Sort items by ID desc
-    items.sort((a, b) => Number(b.id) - Number(a.id))
-
-    return response.json({
-      success: true,
-      data: items,
-    })
   }
 
   /**
@@ -1078,6 +1089,8 @@ export default class AdminController {
       createdRecord = await db.from('labour_listings').where('id', labourId).first()
     }
 
+    apiCache.invalidate('services')
+    apiCache.invalidate('packages')
     return response.json({
       success: true,
       message: provider
@@ -1154,6 +1167,8 @@ export default class AdminController {
       }
     }
 
+    apiCache.invalidate('services')
+    apiCache.invalidate('packages')
     const updated = await db.from('services').where('id', params.id).first()
     return response.json({ success: true, message: 'Service updated successfully', data: updated })
   }
@@ -1163,6 +1178,7 @@ export default class AdminController {
    */
   async deleteService({ params, response }: HttpContext) {
     await db.from('services').where('id', params.id).delete()
+    apiCache.invalidate('services')
     return response.json({ success: true, message: 'Service deleted successfully' })
   }
 
@@ -1233,6 +1249,7 @@ export default class AdminController {
       }
     }
 
+    apiCache.invalidate('packages')
     const updated = await db.from('packages').where('id', params.id).first()
     return response.json({ success: true, message: 'Package updated successfully', data: updated })
   }
@@ -1242,6 +1259,7 @@ export default class AdminController {
    */
   async deletePackage({ params, response }: HttpContext) {
     await db.from('packages').where('id', params.id).delete()
+    apiCache.invalidate('packages')
     return response.json({ success: true, message: 'Package deleted successfully' })
   }
 

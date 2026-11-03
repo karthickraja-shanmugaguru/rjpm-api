@@ -1,4 +1,5 @@
 import db from '@adonisjs/lucid/services/db';
+import apiCache from '../utils/cache.js';
 export default class ProviderPortalController {
     getProviderId(ctx) {
         return ctx?.authProvider?.id || ctx?.authUser?.provider_id || 1;
@@ -444,7 +445,7 @@ export default class ProviderPortalController {
                     priceDisplay: p.price_display,
                     guests: p.guest_capacity || 'Up to 500 guests',
                     guestCapacity: p.guest_capacity,
-                    status: p.status === 'LIVE' ? 'Live' : p.status === 'PAUSED' ? 'Paused' : 'Draft',
+                    status: p.status || 'LIVE',
                     description: p.description,
                     coverImage: p.cover_image,
                     icon: p.icon || '📦',
@@ -538,6 +539,7 @@ export default class ProviderPortalController {
                 }
             }
         }
+        apiCache.invalidate('packages');
         return response.status(201).json({
             success: true,
             message: 'Package created successfully',
@@ -623,6 +625,7 @@ export default class ProviderPortalController {
                 }
             }
         }
+        apiCache.invalidate('packages');
         return response.json({
             success: true,
             message: 'Package updated successfully',
@@ -640,6 +643,7 @@ export default class ProviderPortalController {
             status: nextStatus,
             updated_at: new Date(),
         });
+        apiCache.invalidate('packages');
         return response.json({
             success: true,
             message: `${pkg.name} is now ${nextStatus === 'LIVE' ? 'Live' : 'Paused'}`,
@@ -650,6 +654,7 @@ export default class ProviderPortalController {
         const { params, response } = ctx;
         const providerId = this.getProviderId(ctx);
         await db.from('packages').where('id', params.id).where('provider_id', providerId).delete();
+        apiCache.invalidate('packages');
         return response.json({
             success: true,
             message: 'Package deleted successfully',

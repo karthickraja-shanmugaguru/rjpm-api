@@ -33,7 +33,7 @@ export default class AuthController {
   async autoMergeAndClaimProvider(
     userId: number,
     rawPhone: string,
-    fallbackData: { businessName?: string; ownerName?: string; primaryCategory?: string } = {}
+    fallbackData: { businessName?: string; ownerName?: string; primaryCategory?: string; city?: string } = {}
   ) {
     const cleanPhone = String(rawPhone || '').replace(/\D/g, '').slice(-10)
     if (!cleanPhone || cleanPhone.length !== 10) {

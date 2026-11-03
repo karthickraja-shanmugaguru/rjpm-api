@@ -9,7 +9,7 @@ export default class PackageController {
     const cacheKey = apiCache.makeKey('packages', { eventType, search })
     const cached = apiCache.get(cacheKey)
     if (cached) {
-      return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(cached)
+      return response.header('Cache-Control', 'no-cache, no-store, must-revalidate').json(cached)
     }
 
     let query = db
@@ -18,9 +18,9 @@ export default class PackageController {
       .where('packages.status', 'LIVE')
       .select(
         'packages.*',
-        'packages.phone as package_phone',
-        'packages.whatsapp as package_whatsapp',
-        'packages.attribution_text as package_attribution_text',
+        'providers.phone as package_phone',
+        'providers.whatsapp as package_whatsapp',
+        'providers.attribution_text as package_attribution_text',
         'providers.business_name as provider_name',
         'providers.rating as provider_rating',
         'providers.review_count as provider_reviews',
@@ -114,7 +114,7 @@ export default class PackageController {
       data: result,
     }
     apiCache.set(cacheKey, payload, 60)
-    return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload)
+    return response.header('Cache-Control', 'no-cache, no-store, must-revalidate').json(payload)
   }
 
   async show({ params, response }: HttpContext) {

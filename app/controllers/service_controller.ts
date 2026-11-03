@@ -9,7 +9,7 @@ export default class ServiceController {
     const cacheKey = apiCache.makeKey('services', { category, search, minRating, verified, city })
     const cached = apiCache.get(cacheKey)
     if (cached) {
-      return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(cached)
+      return response.header('Cache-Control', 'no-cache, no-store, must-revalidate').json(cached)
     }
 
     try {
@@ -29,9 +29,9 @@ export default class ServiceController {
           'services.icon',
           'services.cover_image',
           'services.service_area_override',
-          'services.phone as service_phone',
-          'services.whatsapp as service_whatsapp',
-          'services.attribution_text as service_attribution_text',
+          'providers.phone as service_phone',
+          'providers.whatsapp as service_whatsapp',
+          'providers.attribution_text as service_attribution_text',
           'providers.business_name as provider_name',
           'providers.rating as provider_rating',
           'providers.review_count as provider_reviews',
@@ -135,7 +135,7 @@ export default class ServiceController {
         data: formatted,
       }
       apiCache.set(cacheKey, payload, 60)
-      return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload)
+      return response.header('Cache-Control', 'no-cache, no-store, must-revalidate').json(payload)
     } catch (err) {
       console.error('ServiceController error:', err)
       return response.status(500).json({

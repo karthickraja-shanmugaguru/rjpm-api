@@ -9,7 +9,7 @@ export default class ProviderController {
     const cacheKey = apiCache.makeKey('providers', { category, search, verified, city })
     const cached = apiCache.get(cacheKey)
     if (cached) {
-      return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(cached)
+      return response.header('Cache-Control', 'no-cache, no-store, must-revalidate').json(cached)
     }
 
     try {
@@ -167,7 +167,7 @@ export default class ProviderController {
         data: Array.from(phoneMap.values()),
       }
       apiCache.set(cacheKey, payload, 60)
-      return response.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300').json(payload)
+      return response.header('Cache-Control', 'no-cache, no-store, must-revalidate').json(payload)
     } catch (err) {
       console.error('ProviderController error:', err)
       return response.status(500).json({
