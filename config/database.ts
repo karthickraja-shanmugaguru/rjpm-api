@@ -31,12 +31,13 @@ function getMysqlConnection() {
   if (databaseUrl && (databaseUrl.startsWith('mysql://') || databaseUrl.startsWith('mysqls://'))) {
     try {
       const parsed = new URL(databaseUrl)
+      const parsedDb = parsed.pathname.replace(/^\//, '') || 'evently'
       return {
         host: parsed.hostname,
         port: parsed.port ? Number(parsed.port) : 3306,
         user: decodeURIComponent(parsed.username),
         password: decodeURIComponent(parsed.password),
-        database: parsed.pathname.replace(/^\//, '') || 'evently',
+        database: (isTiDB && parsedDb === 'defaultdb') ? 'evently' : parsedDb,
         ssl: mysqlSsl,
       }
     } catch {
@@ -44,12 +45,15 @@ function getMysqlConnection() {
     }
   }
 
+  const rawDb = env.get('DB_DATABASE', 'evently')
+  const targetDb = (isTiDB && rawDb === 'defaultdb') ? 'evently' : rawDb
+
   return {
     host: env.get('DB_HOST', '127.0.0.1'),
     port: env.get('DB_PORT', 3306),
     user: env.get('DB_USER', 'root'),
     password: env.get('DB_PASSWORD', ''),
-    database: env.get('DB_DATABASE', 'evently'),
+    database: targetDb,
     ssl: mysqlSsl,
   }
 }
