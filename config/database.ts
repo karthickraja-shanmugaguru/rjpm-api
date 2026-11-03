@@ -8,8 +8,58 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true })
 }
 
+const dbHost = env.get('DB_HOST', '127.0.0.1')
+const databaseUrl = env.get('DATABASE_URL') || process.env.DATABASE_URL
+const isTiDB =
+  (typeof dbHost === 'string' && dbHost.includes('tidbcloud.com')) ||
+  (typeof databaseUrl === 'string' && databaseUrl.includes('tidbcloud.com'))
+
+const isMysqlSsl =
+  Boolean(env.get('DB_SSL')) ||
+  String(process.env.DB_SSL || '').toLowerCase() === 'true' ||
+  String(process.env.DB_SSL || '') === '1' ||
+  isTiDB
+
+const mysqlSsl = isMysqlSsl
+  ? {
+      minVersion: 'TLSv1.2',
+      rejectUnauthorized: env.get('DB_SSL_REJECT_UNAUTHORIZED') === false ? false : true,
+    }
+  : undefined
+
+function getMysqlConnection() {
+  if (databaseUrl && (databaseUrl.startsWith('mysql://') || databaseUrl.startsWith('mysqls://'))) {
+    try {
+      const parsed = new URL(databaseUrl)
+      return {
+        host: parsed.hostname,
+        port: parsed.port ? Number(parsed.port) : 3306,
+        user: decodeURIComponent(parsed.username),
+        password: decodeURIComponent(parsed.password),
+        database: parsed.pathname.replace(/^\//, '') || 'evently',
+        ssl: mysqlSsl,
+      }
+    } catch {
+      // Fallback to standard env vars
+    }
+  }
+
+  return {
+    host: env.get('DB_HOST', '127.0.0.1'),
+    port: env.get('DB_PORT', 3306),
+    user: env.get('DB_USER', 'root'),
+    password: env.get('DB_PASSWORD', ''),
+    database: env.get('DB_DATABASE', 'evently'),
+    ssl: mysqlSsl,
+  }
+}
+
+const defaultConnection =
+  env.get('DB_CONNECTION') ||
+  (isTiDB ? 'mysql' : 'sqlite')
+
 const dbConfig = defineConfig({
-  connection: env.get('DB_CONNECTION', 'sqlite'),
+  connection: defaultConnection,
   connections: {
     sqlite: {
       client: 'better-sqlite3',
@@ -27,14 +77,7 @@ const dbConfig = defineConfig({
     },
     mysql: {
       client: 'mysql2',
-      connection: {
-        host: env.get('DB_HOST', '127.0.0.1'),
-        port: env.get('DB_PORT', 3306),
-        user: env.get('DB_USER', 'root'),
-        password: env.get('DB_PASSWORD', ''),
-        database: env.get('DB_DATABASE', 'evently'),
-        ssl: env.get('DB_SSL') ? { rejectUnauthorized: false } : undefined,
-      },
+      connection: getMysqlConnection(),
       migrations: {
         naturalSort: true,
         paths: ['database/migrations'],

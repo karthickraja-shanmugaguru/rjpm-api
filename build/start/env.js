@@ -13,6 +13,7 @@ export default await Env.create(new URL('../', import.meta.url), {
     DB_PASSWORD: Env.schema.string.optional(),
     DB_DATABASE: Env.schema.string.optional(),
     DB_SSL: Env.schema.boolean.optional(),
+    DB_SSL_REJECT_UNAUTHORIZED: Env.schema.boolean.optional(),
     JWT_SECRET: Env.schema.string.optional(),
 });
 //# sourceMappingURL=env.js.map
